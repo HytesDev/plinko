@@ -46,17 +46,17 @@
       <div class="flex items-center justify-between p-2">
         <p class="text-sm text-slate-500">
           <a
-            href="https://www.ansonh.com"
+            href="/"
             target="_blank"
             rel="noreferrer"
             class=" text-cyan-600 transition hover:text-cyan-500"
           >
-            Anson Heung
+            Plinko Game Online
           </a>
           © 2024
         </p>
         <a
-          href="https://github.com/AnsonH/plinko-game"
+          href="https://github.com/plinko-game-online/plinko-game-online.github.io"
           target="_blank"
           rel="noreferrer"
           class="flex items-center gap-1 p-1 text-sm text-slate-500 transition hover:text-cyan-500"
