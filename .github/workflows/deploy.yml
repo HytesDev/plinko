@@ -2,13 +2,11 @@ name: Deploy Svelte to GitHub Pages
 
 on:
   push:
-    branches: [ main ]  # 设置在 main 分支上推送时触发
-  workflow_dispatch:    # 允许手动触发部署
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -38,5 +36,6 @@ jobs:
       - name: Deploy to GitHub Pages 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: build    # Svelte 构建输出目录
+          folder: build
           branch: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}  # 使用自动生成的 token
