@@ -1,6 +1,6 @@
 {
-  "name": "Plinko",
-  "short_name": "Plinko",
+  "name": "Free Plinko Game Online - Play & Win Instant Rewards",
+  "short_name": "Free Plinko Game Online",
   "icons": [
     { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
