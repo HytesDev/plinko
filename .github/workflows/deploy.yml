@@ -1,31 +1,50 @@
-name: Deploy to GitHub Pages
+name: Deploy Svelte to GitHub Pages
 
 on:
   push:
-    branches:
-      - main  # 或者你想要部署的分支x
+    branches: [ main ]  # 设置在 main 分支上推送时触发
+  workflow_dispatch:    # 允许手动触发部署
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: '16'  # 确保使用与你项目兼容的 Node.js 版本
+          node-version: '20'
 
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build project
-        run: pnpm build
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist  # 确保与构建输出目录一致
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies 🔧
+        run: pnpm install --frozen-lockfile
+
+      - name: Build 🏗️
+        run: pnpm run build
+
+      - name: Deploy to GitHub Pages 🚀
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist    # Svelte 构建输出目录
+          branch: gh-pages
