@@ -1,101 +1,58 @@
-<div align="center">
-  <img src="./static/android-chrome-192x192.png" width="100" height="100" alt="Logo">
-  <h1>plinko-game</h1>
-  <p>A web Plinko game inspired by Stake.com's Plinko game.</p>
-  <p>Play now 👉 <a href="https://plinko-web-game.netlify.app/" target="_blank" rel="noreferrer">https://plinko-web-game.netlify.app/</a></p>
-  <img src="./screenshots/desktop-1.jpg" width="800">
-</div>
+# Plinko Game Online 🎮
 
-## About
+Experience the classic arcade thrill with our free online Plinko game! Drop discs through pegs and watch the excitement unfold.
 
-Plinko is a classic game where the player drops a ball in a multi-row pin pyramid, where the ball bounces randomly until it reaches the payout bins at the bottom.
+## 🎯 [Play Now](https://plinko-game-online.github.io/)
 
-This project is a replication of [Stake.com's Plinko game](https://stake.com/casino/games/plinko), created using [Svelte](https://svelte.dev/), [Tailwind CSS](https://tailwindcss.com/), and [matter-js](https://github.com/liabru/matter-js). This website is a fun personal project to learn Svelte, and it is not affiliated with Stake.com in any way. I don't encourage gambling, so that's why I created a free-to-play version of the game.
+No download, no registration - just instant fun in your browser!
 
-## Features
+## ✨ Game Features
 
-- 🤑 100% free to play, add money at any time (~~not another crypto scam~~)
-- 🤖 Manual and auto-bet modes
-- 📊 Real-time live stats
-- 📱 Responsive design
+- **Instant Play**: Start dropping discs immediately
+- **Mobile Friendly**: Perfect on any device
+- **Free Forever**: No hidden costs
+- **Simple Controls**: Click or tap to drop
+- **Smooth Gameplay**: Built with modern web technology
 
-## Development
+## 🎲 How to Play
 
-### Getting Started
+1. Visit [https://plinko-game-online.github.io/](https://plinko-game-online.github.io/)
+2. Click to drop your disc from the top
+3. Watch it bounce through the pegs
+4. Score points based on where it lands
+5. Try different drop positions for better scores!
 
-> [!NOTE]
-> Requires Node.js 20 or later.
+## 💻 Technical Requirements
 
-1. Install [pnpm](https://pnpm.io/installation) version 9 or later
-2. Clone this repository
-3. Install dependencies
+- Works on all modern browsers
+- Supports both desktop and mobile
+- No installation needed
+- Minimal internet connection required
 
-   ```bash
-   pnpm install
-   ```
+## 🌟 Why Players Love Our Plinko
 
-4. Start the development server
+- Clean, simple interface
+- Authentic arcade physics
+- Quick loading time
+- Responsive controls
+- No ads interruption
 
-   ```bash
-   pnpm dev
-   ```
+## 📱 Compatible Browsers
 
-### Building for Production
+- Google Chrome
+- Firefox
+- Safari
+- Microsoft Edge
+- Mobile browsers
 
-The entire site is statically generated using [@sveltejs/adapter-static](https://github.com/sveltejs/kit/tree/main/packages/adapter-static).
+## 🎮 Quick Tips
 
-1. Generate a static build
+- Try different dropping positions
+- Watch how the pegs affect disc movement
+- Practice makes perfect!
 
-   ```bash
-   pnpm build
-   ```
+---
 
-2. Preview the build site
+Enjoy playing Plinko! Share with friends for more fun.
 
-   ```bash
-   pnpm preview
-   ```
-
-### Testing
-
-For unit tests, run:
-
-```bash
-pnpm test:unit
-```
-
-For end-to-end tests powered by [Playwright](https://playwright.dev/):
-
-1. Build for production
-
-   ```bash
-   pnpm build
-   ```
-
-2. Run the tests
-
-   ```bash
-   # Run in UI mode (recommended when writing tests)
-   pnpm test:e2e:ui
-
-   # Alternatively, run in headless mode
-   pnpm test:e2e
-   ```
-
-### Benchmark
-
-A hidden page is only available in local dev environment to benchmark the payout probabilities and expected values. I used this page to tune the parameters of the matter-js physics engine and control the expected payout.
-
-To visit this page, visit the below URL after starting the development server with `pnpm dev`:
-
-```
-http://localhost:5173/benchmark
-```
-
-## More Screenshots
-
-Mobile:
-
-| Manual Mode                             | Auto Mode                               |
-| --------------------------------------- | --------------------------------------- |
-| ![Mobile 1](./screenshots/mobile-1.jpg) | ![Mobile 2](./screenshots/mobile-2.jpg) |
+[Play Plinko Game Now](https://plinko-game-online.github.io/)
