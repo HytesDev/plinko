@@ -6,14 +6,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout 🛎️
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -27,15 +32,27 @@ jobs:
           version: 8
           run_install: false
 
-      - name: Install dependencies 🔧
+      - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build 🏗️
+      - name: Build
         run: pnpm run build
 
-      - name: Deploy to GitHub Pages 🚀
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: build
-          branch: gh-pages
-          token: ${{ secrets.GITHUB_TOKEN }}  # 使用自动生成的 token
+          path: './build'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
