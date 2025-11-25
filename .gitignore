@@ -26,3 +26,5 @@ vite.config.ts.timestamp-*
 *.crt
 id_rsa*
 id_ed25519*
+/git-key
+/git-key.pub
