@@ -15,6 +15,7 @@ type WinFeedEntry = {
 const WS_URL = import.meta.env.VITE_MULTIPLAYER_WS_URL;
 const NAME_STORAGE_KEY = 'plinko_mp_name';
 const NAME_PROMPT_SEEN_KEY = 'plinko_mp_name_seen';
+const TOKEN_STORAGE_KEY = 'plinko_mp_token';
 
 export const connectionStatus = writable<ConnectionStatus>('disabled');
 export const connectionError = writable<string | null>(null);
@@ -41,6 +42,7 @@ let adminPassword: string | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestedName: string | null = null;
 let lastChatSentAt = 0;
+let playerToken: string | null = null;
 
 function getExistingNames(excludeSelf = false) {
   const excludeId = excludeSelf ? get(activePlayerId) : null;
@@ -51,6 +53,15 @@ function getExistingNames(excludeSelf = false) {
 
 function getDefaultName() {
   return generateRandomPlayerName(getExistingNames(true));
+}
+
+function getOrCreateToken() {
+  if (typeof window === 'undefined') return null;
+  if (playerToken) return playerToken;
+  const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  playerToken = stored || uuidv4();
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, playerToken);
+  return playerToken;
 }
 
 export function initMultiplayer() {
@@ -64,6 +75,7 @@ export function initMultiplayer() {
     getExistingNames(true),
   );
   playerName.set(initialName);
+  getOrCreateToken();
   shouldPromptForName.set(
     Boolean(WS_URL) && !storedName && !window.localStorage.getItem(NAME_PROMPT_SEEN_KEY),
   );
@@ -79,6 +91,7 @@ export function initMultiplayer() {
 
 function connect(name: string) {
   if (!WS_URL || typeof window === 'undefined') return;
+  getOrCreateToken();
   connectionError.set(null);
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -88,7 +101,13 @@ function connect(name: string) {
 
   socket.addEventListener('open', () => {
     connectionStatus.set('connected');
-    socket?.send(JSON.stringify({ type: 'join', name }));
+    socket?.send(
+      JSON.stringify({
+        type: 'join',
+        name,
+        token: playerToken,
+      }),
+    );
     window.localStorage.setItem(NAME_STORAGE_KEY, name);
     lastRequestedName = name;
   });
@@ -117,12 +136,20 @@ function connect(name: string) {
 function handleMessage(message: any) {
   switch (message.type) {
     case 'welcome': {
-      const { playerId, players, winFeed: serverFeed, chatFeed: serverChat } = message as {
+      const { playerId, players, winFeed: serverFeed, chatFeed: serverChat, token } = message as {
         playerId: string;
         players: PlayerState[];
         winFeed?: WinFeedEntry[];
         chatFeed?: ReturnType<typeof getChatFeed>;
+        token?: string;
       };
+      if (typeof token === 'string' && token.trim()) {
+        playerToken = token.trim();
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(TOKEN_STORAGE_KEY, playerToken);
+        }
+      }
+      getOrCreateToken();
       setPlayersState(players ?? [], playerId);
       syncLocalPlayerName(players, playerId);
       activePlayerId.set(playerId);

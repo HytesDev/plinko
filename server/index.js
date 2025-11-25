@@ -11,6 +11,8 @@ const MAX_CHAT_MESSAGES = 200;
 
 const players = new Map();
 const socketsByPlayer = new Map();
+const tokensByPlayerId = new Map();
+const storedPlayersByToken = new Map();
 const winFeed = [];
 const chatFeed = [];
 
@@ -31,6 +33,14 @@ function makePlayer(name) {
   };
 }
 
+function persistPlayerById(playerId) {
+  const token = tokensByPlayerId.get(playerId);
+  const player = players.get(playerId);
+  if (token && player) {
+    storedPlayersByToken.set(token, structuredClone(player));
+  }
+}
+
 function broadcast(messageObj) {
   const payload = JSON.stringify(messageObj);
   socketsByPlayer.forEach((socket) => {
@@ -41,6 +51,7 @@ function broadcast(messageObj) {
 }
 
 function syncPlayers() {
+  players.forEach((player) => persistPlayerById(player.id));
   broadcast({
     type: 'players',
     players: Array.from(players.values()),
@@ -129,10 +140,24 @@ function handleWin(playerId, record) {
   syncPlayers();
 }
 
-function handleJoin(name, socket) {
-  const uniqueName = ensureUniqueName(name);
-  const player = makePlayer(uniqueName);
+function handleJoin(name, socket, providedToken) {
+  let token = providedToken && typeof providedToken === 'string' ? providedToken : null;
+  const cachedPlayer = token ? storedPlayersByToken.get(token) : null;
+  let player = cachedPlayer ? structuredClone(cachedPlayer) : null;
+
+  if (player) {
+    player.name = ensureUniqueName(player.name, player.id);
+  } else {
+    token = uuidv4();
+    player = makePlayer(ensureUniqueName(name));
+  }
+
+  if (token) {
+    storedPlayersByToken.set(token, structuredClone(player));
+  }
+
   players.set(player.id, player);
+  tokensByPlayerId.set(player.id, token);
   socketsByPlayer.set(player.id, socket);
 
   socket.send(
@@ -142,12 +167,18 @@ function handleJoin(name, socket) {
       players: Array.from(players.values()),
       winFeed,
       chatFeed,
+      token,
     }),
   );
   syncPlayers();
 
   socket.on('close', () => {
+    const token = tokensByPlayerId.get(player.id);
+    if (token) {
+      persistPlayerById(player.id);
+    }
     players.delete(player.id);
+    tokensByPlayerId.delete(player.id);
     socketsByPlayer.delete(player.id);
     syncPlayers();
   });
@@ -260,6 +291,7 @@ function handleAdminAction(msg, socket) {
     case 'rename_player': {
       const nextName = ensureUniqueName((msg.name || '').slice(0, 24), targetPlayerId);
       player.name = nextName;
+      persistPlayerById(player.id);
       sendAdminResult(socket, {
         type: 'admin_action_result',
         requestId,
@@ -283,6 +315,7 @@ function handleAdminAction(msg, socket) {
         return;
       }
       player.balance = nextBalance;
+      persistPlayerById(player.id);
       sendAdminResult(socket, {
         type: 'admin_action_result',
         requestId,
@@ -298,6 +331,7 @@ function handleAdminAction(msg, socket) {
       player.balance = STARTING_BALANCE;
       player.winRecords = [];
       player.totalProfitHistory = [0];
+      persistPlayerById(player.id);
       sendAdminResult(socket, {
         type: 'admin_action_result',
         requestId,
@@ -311,6 +345,11 @@ function handleAdminAction(msg, socket) {
     }
     case 'remove_player': {
       players.delete(targetPlayerId);
+      const playerToken = tokensByPlayerId.get(targetPlayerId);
+      if (playerToken) {
+        storedPlayersByToken.delete(playerToken);
+        tokensByPlayerId.delete(targetPlayerId);
+      }
       const targetSocket = socketsByPlayer.get(targetPlayerId);
       socketsByPlayer.delete(targetPlayerId);
       if (targetSocket) {
@@ -366,7 +405,7 @@ wss.on('connection', (socket) => {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'join' && !playerId) {
-        playerId = handleJoin(msg.name, socket);
+        playerId = handleJoin(msg.name, socket, msg.token);
         return;
       }
 
