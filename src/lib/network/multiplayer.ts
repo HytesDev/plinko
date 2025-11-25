@@ -209,6 +209,9 @@ function handleMessage(message: any) {
       }
       if (!ok && reason) {
         adminError.set(reason);
+        if (reason.toLowerCase().includes('invalid password')) {
+          adminAuthState.set('locked');
+        }
       }
       break;
     }
@@ -341,6 +344,8 @@ function sendAdminRequest(body: Record<string, unknown>) {
     setTimeout(() => {
       if (pendingAdminRequests.has(requestId)) {
         pendingAdminRequests.delete(requestId);
+        adminAuthState.set('locked');
+        adminError.set('Admin request timed out');
         resolve({ ok: false, reason: 'Admin request timed out' });
       }
     }, 3000);
@@ -354,6 +359,12 @@ export function authenticateAdmin(password: string) {
   return sendAdminRequest({
     type: 'admin_auth',
     password,
+  }).then((result) => {
+    if (!result.ok && result.reason) {
+      adminAuthState.set('locked');
+      adminError.set(result.reason);
+    }
+    return result;
   });
 }
 

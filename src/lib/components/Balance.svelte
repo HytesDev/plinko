@@ -6,7 +6,9 @@
     requestBalanceReset,
   } from '$lib/network/multiplayer';
   import { balance, resetActivePlayer } from '$lib/stores/game';
+  import { isAdminPanelOpen } from '$lib/stores/layout';
   import { formatCurrency } from '$lib/utils/numbers';
+  import ShieldCheck from 'phosphor-svelte/lib/ShieldCheck';
 
   let resetError = '';
   let isResetting = false;
@@ -45,6 +47,14 @@
       class="rounded-md bg-yellow-400 px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-yellow-300 active:bg-yellow-500 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300 sm:text-sm"
     >
       Reset to ${defaultStartingBalance}
+    </button>
+    <button
+      aria-label="Open admin panel"
+      on:click={() => isAdminPanelOpen.set(true)}
+      class="flex items-center gap-1 rounded-md bg-slate-900 px-2 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 active:bg-slate-600 sm:text-sm"
+      title="Admin"
+    >
+      <ShieldCheck class="size-4" weight="fill" />
     </button>
     {#if isResetting}
       <span class="text-xs text-slate-300">Resetting…</span>
