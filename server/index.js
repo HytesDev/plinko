@@ -13,6 +13,7 @@ const players = new Map();
 const socketsByPlayer = new Map();
 const tokensByPlayerId = new Map();
 const storedPlayersByToken = new Map();
+const adminPlayerIds = new Set();
 const winFeed = [];
 const chatFeed = [];
 
@@ -54,14 +55,19 @@ function syncPlayers() {
   players.forEach((player) => persistPlayerById(player.id));
   broadcast({
     type: 'players',
-    players: Array.from(players.values()),
+    players: getPlayersWithAdminFlag(),
     winFeed,
     chatFeed,
   });
 }
 
 function addWinToFeed(player, record) {
-  winFeed.push({ playerId: player.id, playerName: player.name, record });
+  winFeed.push({
+    playerId: player.id,
+    playerName: player.name,
+    isAdmin: adminPlayerIds.has(player.id),
+    record,
+  });
   if (winFeed.length > MAX_WIN_FEED) {
     winFeed.splice(0, winFeed.length - MAX_WIN_FEED);
   }
@@ -164,7 +170,7 @@ function handleJoin(name, socket, providedToken) {
     JSON.stringify({
       type: 'welcome',
       playerId: player.id,
-      players: Array.from(players.values()),
+      players: getPlayersWithAdminFlag(),
       winFeed,
       chatFeed,
       token,
@@ -179,6 +185,7 @@ function handleJoin(name, socket, providedToken) {
     }
     players.delete(player.id);
     tokensByPlayerId.delete(player.id);
+    adminPlayerIds.delete(player.id);
     socketsByPlayer.delete(player.id);
     syncPlayers();
   });
@@ -252,6 +259,9 @@ function sendAdminResult(socket, payload) {
 
 function handleAdminAuth(password, socket, requestId) {
   const ok = password === ADMIN_PASSWORD;
+  if (ok && socket.playerId) {
+    adminPlayerIds.add(socket.playerId);
+  }
   sendAdminResult(socket, {
     type: 'admin_auth_result',
     requestId,
@@ -270,6 +280,9 @@ function handleAdminAction(msg, socket) {
       reason: 'Invalid password',
     });
     return;
+  }
+  if (socket.playerId) {
+    adminPlayerIds.add(socket.playerId);
   }
 
   const targetPlayerId = msg.playerId;
@@ -371,7 +384,7 @@ function handleAdminAction(msg, socket) {
         requestId,
         ok: true,
         action,
-        players: Array.from(players.values()),
+        players: getPlayersWithAdminFlag(),
         winFeed,
         chatFeed,
       });
@@ -406,6 +419,7 @@ wss.on('connection', (socket) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'join' && !playerId) {
         playerId = handleJoin(msg.name, socket, msg.token);
+        socket.playerId = playerId;
         return;
       }
 
@@ -465,8 +479,16 @@ wss.on('connection', (socket) => {
   socket.on('close', () => {
     if (playerId) {
       players.delete(playerId);
+      adminPlayerIds.delete(playerId);
       socketsByPlayer.delete(playerId);
       syncPlayers();
     }
   });
 });
+
+function getPlayersWithAdminFlag() {
+  return Array.from(players.values()).map((player) => ({
+    ...player,
+    isAdmin: adminPlayerIds.has(player.id),
+  }));
+}

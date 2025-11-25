@@ -2,6 +2,7 @@
   import { players, activePlayerId } from '$lib/stores/game';
   import { formatCurrency } from '$lib/utils/numbers';
   import CrownSimple from 'phosphor-svelte/lib/CrownSimple';
+  import ShieldCheck from 'phosphor-svelte/lib/ShieldCheck';
 
   const MAX_ROWS = 10;
 
@@ -66,6 +67,9 @@
             <span class="font-semibold text-slate-300">{index + 1}</span>
             <div class="flex items-center gap-2 text-white">
               <span class="truncate">{entry.name}</span>
+              {#if entry.isAdmin}
+                <ShieldCheck class="size-4 text-cyan-300" weight="fill" aria-label="Admin" />
+              {/if}
               {#if entry.id === $activePlayerId}
                 <span class="rounded-sm bg-cyan-500 px-2 py-0.5 text-[11px] font-semibold text-slate-900">You</span>
               {/if}
@@ -97,6 +101,9 @@
             <span class="font-semibold text-slate-300">{index + 1}</span>
             <div class="flex items-center gap-2 text-white">
               <span class="truncate">{entry.name}</span>
+              {#if entry.isAdmin}
+                <ShieldCheck class="size-4 text-cyan-300" weight="fill" aria-label="Admin" />
+              {/if}
               {#if entry.id === $activePlayerId}
                 <span class="rounded-sm bg-cyan-500 px-2 py-0.5 text-[11px] font-semibold text-slate-900">You</span>
               {/if}

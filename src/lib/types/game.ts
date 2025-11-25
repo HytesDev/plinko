@@ -73,4 +73,8 @@ export type PlayerState = {
    * History of total profits. Starts with 0.
    */
   totalProfitHistory: number[];
+  /**
+   * Whether this player is authorized as an admin.
+   */
+  isAdmin?: boolean;
 };

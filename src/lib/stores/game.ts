@@ -156,6 +156,7 @@ function normalizePlayerState(player: PlayerState): PlayerState {
       Array.isArray(player.totalProfitHistory) && player.totalProfitHistory.length
         ? player.totalProfitHistory
         : [0],
+    isAdmin: Boolean(player.isAdmin),
   };
 }
 

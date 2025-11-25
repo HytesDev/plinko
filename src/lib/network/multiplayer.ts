@@ -9,6 +9,7 @@ type ConnectionStatus = 'disabled' | 'connecting' | 'connected' | 'error';
 type WinFeedEntry = {
   playerId: string;
   playerName: string;
+  isAdmin?: boolean;
   record: WinRecord;
 };
 

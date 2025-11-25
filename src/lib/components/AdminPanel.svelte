@@ -14,6 +14,7 @@
   import { players } from '$lib/stores/game';
   import { isAdminPanelOpen } from '$lib/stores/layout';
   import { formatCurrency } from '$lib/utils/numbers';
+  import ShieldCheck from 'phosphor-svelte/lib/ShieldCheck';
 
   let password = '';
   let actionMessage = '';
@@ -30,10 +31,10 @@
       Object.entries(balanceInputs).filter(([id]) => activeIds.has(id)),
     );
     for (const player of $players) {
-      if (!renameInputs[player.id]) {
+      if (!Object.prototype.hasOwnProperty.call(renameInputs, player.id)) {
         renameInputs = { ...renameInputs, [player.id]: player.name };
       }
-      if (!balanceInputs[player.id]) {
+      if (!Object.prototype.hasOwnProperty.call(balanceInputs, player.id)) {
         balanceInputs = { ...balanceInputs, [player.id]: player.balance.toString() };
       }
     }
@@ -138,7 +139,12 @@
             {#each $players as player}
               <div class="rounded-md border border-slate-600 bg-slate-800 p-3 shadow-sm">
                 <div class="flex items-center justify-between gap-2">
-                  <p class="text-sm font-semibold text-white">{player.name}</p>
+                  <div class="flex items-center gap-1 text-sm font-semibold text-white">
+                    <p>{player.name}</p>
+                    {#if player.isAdmin}
+                      <ShieldCheck class="size-4 text-cyan-300" weight="fill" aria-label="Admin" />
+                    {/if}
+                  </div>
                   <p class="text-xs text-slate-400">{formatCurrency(player.balance)}</p>
                 </div>
                 <div class="mt-2 space-y-2">
