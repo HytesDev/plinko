@@ -7,10 +7,12 @@ const MAX_WIN_RECORDS = 200;
 const MAX_WIN_FEED = 50;
 const STARTING_BALANCE = 500;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'canEggAI';
+const MAX_CHAT_MESSAGES = 200;
 
 const players = new Map();
 const socketsByPlayer = new Map();
 const winFeed = [];
+const chatFeed = [];
 
 const httpServer = createServer();
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -43,6 +45,7 @@ function syncPlayers() {
     type: 'players',
     players: Array.from(players.values()),
     winFeed,
+    chatFeed,
   });
 }
 
@@ -138,6 +141,7 @@ function handleJoin(name, socket) {
       playerId: player.id,
       players: Array.from(players.values()),
       winFeed,
+      chatFeed,
     }),
   );
   syncPlayers();
@@ -178,6 +182,37 @@ function handleReset(playerId, socket, requestId) {
     }),
   );
   syncPlayers();
+}
+
+function handleChat(playerId, text) {
+  const player = players.get(playerId);
+  if (!player) return;
+  const trimmed = (text || '').toString().slice(0, 256).trim();
+  if (!trimmed) return;
+
+  const message = {
+    id: uuidv4(),
+    playerId: player.id,
+    playerName: player.name,
+    text: trimmed,
+    timestamp: Date.now(),
+  };
+  chatFeed.push(message);
+  if (chatFeed.length > MAX_CHAT_MESSAGES) {
+    chatFeed.splice(0, chatFeed.length - MAX_CHAT_MESSAGES);
+  }
+
+  broadcast({
+    type: 'chat_message',
+    message,
+  });
+}
+
+function broadcastChatFeed() {
+  broadcast({
+    type: 'chat_feed',
+    chatFeed,
+  });
 }
 
 function sendAdminResult(socket, payload) {
@@ -299,7 +334,19 @@ function handleAdminAction(msg, socket) {
         action,
         players: Array.from(players.values()),
         winFeed,
+        chatFeed,
       });
+      break;
+    }
+    case 'clear_chat': {
+      chatFeed.splice(0, chatFeed.length);
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+      });
+      broadcastChatFeed();
       break;
     }
     default:
@@ -342,6 +389,9 @@ wss.on('connection', (socket) => {
           break;
         case 'reset':
           handleReset(playerId, socket, msg.requestId);
+          break;
+        case 'chat':
+          handleChat(playerId, msg.text);
           break;
         case 'rename': {
           const player = players.get(playerId);

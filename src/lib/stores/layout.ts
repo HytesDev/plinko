@@ -7,3 +7,5 @@ export const isLiveStatsOpen = writable<boolean>(false);
 export const isAdminPanelOpen = writable<boolean>(false);
 
 export const isCreditsOpen = writable<boolean>(false);
+
+export const isChatOpen = writable<boolean>(false);

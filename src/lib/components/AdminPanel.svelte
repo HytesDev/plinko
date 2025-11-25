@@ -4,6 +4,7 @@
   import {
     adminAuthState,
     adminError,
+    adminClearChat,
     adminRemovePlayer,
     adminRenamePlayer,
     adminResetPlayer,
@@ -205,6 +206,20 @@
         {#if actionMessage}
           <p class="rounded-md bg-emerald-900/60 px-3 py-2 text-xs text-emerald-200">{actionMessage}</p>
         {/if}
+
+        <div class="mt-2 rounded-md border border-slate-600 bg-slate-800 p-3">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs uppercase tracking-wide text-slate-400">Moderation</p>
+            <button
+              class="rounded-sm bg-red-500 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+              on:click={() => adminClearChat()}
+              disabled={isSaving}
+            >
+              Clear Chat
+            </button>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-400">Remove chat messages for everyone.</p>
+        </div>
       </div>
     {:else}
       <form class="space-y-3 text-sm text-white" on:submit|preventDefault={handleUnlock}>

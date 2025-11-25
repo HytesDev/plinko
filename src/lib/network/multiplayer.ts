@@ -23,6 +23,9 @@ export const shouldPromptForName = writable<boolean>(false);
 export const adminAuthState = writable<'locked' | 'pending' | 'authorized'>('locked');
 export const adminError = writable<string | null>(null);
 const pendingRename = writable<string | null>(null);
+export const chatFeed = writable<
+  { id: string; playerId: string; playerName: string; text: string; timestamp: number }[]
+>([]);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
@@ -36,6 +39,7 @@ const pendingAdminRequests = new Map<
 let adminPassword: string | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestedName: string | null = null;
+let lastChatSentAt = 0;
 
 function getDefaultName() {
   const suffix = Math.floor(Math.random() * 900 + 100);
@@ -100,10 +104,11 @@ function connect(name: string) {
 function handleMessage(message: any) {
   switch (message.type) {
     case 'welcome': {
-      const { playerId, players, winFeed: serverFeed } = message as {
+      const { playerId, players, winFeed: serverFeed, chatFeed: serverChat } = message as {
         playerId: string;
         players: PlayerState[];
         winFeed?: WinFeedEntry[];
+        chatFeed?: ReturnType<typeof getChatFeed>;
       };
       setPlayersState(players ?? [], playerId);
       syncLocalPlayerName(players, playerId);
@@ -111,18 +116,25 @@ function handleMessage(message: any) {
       if (Array.isArray(serverFeed)) {
         winFeed.set(serverFeed);
       }
+      if (Array.isArray(serverChat)) {
+        chatFeed.set(serverChat);
+      }
       triggerPendingRename();
       break;
     }
     case 'players': {
-      const { players, winFeed: serverFeed } = message as {
+      const { players, winFeed: serverFeed, chatFeed: serverChat } = message as {
         players: PlayerState[];
         winFeed?: WinFeedEntry[];
+        chatFeed?: ReturnType<typeof getChatFeed>;
       };
       setPlayersState(players ?? [], get(activePlayerId));
       syncLocalPlayerName(players);
       if (Array.isArray(serverFeed)) {
         winFeed.set(serverFeed);
+      }
+      if (Array.isArray(serverChat)) {
+        chatFeed.set(serverChat);
       }
       triggerPendingRename();
       break;
@@ -141,6 +153,20 @@ function handleMessage(message: any) {
       if (resolver) {
         resolver({ ok, reason });
         pendingBets.delete(requestId);
+      }
+      break;
+    }
+    case 'chat_message': {
+      const { message: chatMessage } = message as { message?: ReturnType<typeof getChatFeed>[number] };
+      if (chatMessage) {
+        chatFeed.update((msgs) => [...msgs.slice(-199), chatMessage]);
+      }
+      break;
+    }
+    case 'chat_feed': {
+      const { chatFeed: serverChat } = message as { chatFeed?: ReturnType<typeof getChatFeed> };
+      if (Array.isArray(serverChat)) {
+        chatFeed.set(serverChat);
       }
       break;
     }
@@ -351,6 +377,30 @@ function triggerPendingRename() {
   );
 }
 
+function getChatFeed() {
+  return get(chatFeed);
+}
+
+export function sendChatMessage(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: false, reason: 'Message required' };
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return { ok: false, reason: 'Not connected to multiplayer' };
+  }
+  const now = Date.now();
+  if (now - lastChatSentAt < 500) {
+    return { ok: false, reason: 'Please slow down' };
+  }
+  lastChatSentAt = now;
+  socket.send(
+    JSON.stringify({
+      type: 'chat',
+      text: trimmed.slice(0, 256),
+    }),
+  );
+  return { ok: true };
+}
+
 function sendAdminRequest(body: Record<string, unknown>) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return Promise.resolve({ ok: false, reason: 'Not connected to multiplayer' });
@@ -449,4 +499,10 @@ export async function adminRemovePlayer(playerId: string) {
   const authed = await requireAdminAuth();
   if (!authed) return { ok: false, reason: 'Not authorized' };
   return adminAction('remove_player', { playerId });
+}
+
+export async function adminClearChat() {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('clear_chat', {});
 }
