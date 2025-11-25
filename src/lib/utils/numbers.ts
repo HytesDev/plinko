@@ -83,14 +83,20 @@ export function factorial(n: number): number {
  * formatCurrency(123456.789); // "$123,456.79"
  * formatCurrency(2); // "$2.00"
  * formatCurrency(-2); // "-$2.00"
+ * formatCurrency(2400000000); // "$2.4B"
  */
 export function formatCurrency(value: number): string {
-  return value.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const abs = Math.abs(value);
+  const isCompact = abs >= 1_000_000;
+  const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    notation: isCompact ? 'compact' : 'standard',
+    minimumFractionDigits: isCompact ? 0 : 2,
+    maximumFractionDigits: isCompact ? 2 : 2,
   });
+
+  return formatter.format(value);
 }
 
 /**

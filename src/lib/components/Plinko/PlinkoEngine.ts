@@ -1,13 +1,12 @@
 import { binPayouts } from '$lib/constants/game';
 import {
+  activePlayerId,
   rowCount,
-  winRecords,
   riskLevel,
   betAmount,
-  balance,
   betAmountOfExistingBalls,
-  totalProfitHistory,
 } from '$lib/stores/game';
+import { reportWin } from '$lib/network/multiplayer';
 import type { RiskLevel, RowCount } from '$lib/types';
 import { getRandomBetween } from '$lib/utils/numbers';
 import Matter, { type IBodyDefinition } from 'matter-js';
@@ -209,8 +208,12 @@ class PlinkoEngine {
     );
     Matter.Composite.add(this.engine.world, ball);
 
-    betAmountOfExistingBalls.update((value) => ({ ...value, [ball.id]: this.betAmount }));
-    balance.update((balance) => balance - this.betAmount);
+    const playerId = get(activePlayerId);
+
+    betAmountOfExistingBalls.update((value) => ({
+      ...value,
+      [ball.id]: { betAmount: this.betAmount, playerId },
+    }));
   }
 
   /**
@@ -255,13 +258,14 @@ class PlinkoEngine {
   private handleBallEnterBin(ball: Matter.Body) {
     const binIndex = this.pinsLastRowXCoords.findLastIndex((pinX) => pinX < ball.position.x);
     if (binIndex !== -1 && binIndex < this.pinsLastRowXCoords.length - 1) {
-      const betAmount = get(betAmountOfExistingBalls)[ball.id] ?? 0;
+      const betRecord = get(betAmountOfExistingBalls)[ball.id];
+      const betAmount = betRecord?.betAmount ?? 0;
+      const playerId = betRecord?.playerId ?? get(activePlayerId);
       const multiplier = binPayouts[this.rowCount][this.riskLevel][binIndex];
       const payoutValue = betAmount * multiplier;
       const profit = payoutValue - betAmount;
 
-      winRecords.update((records) => [
-        ...records,
+      reportWin(
         {
           id: uuidv4(),
           betAmount,
@@ -273,12 +277,8 @@ class PlinkoEngine {
           },
           profit,
         },
-      ]);
-      totalProfitHistory.update((history) => {
-        const lastTotalProfit = history.slice(-1)[0];
-        return [...history, lastTotalProfit + profit];
-      });
-      balance.update((balance) => balance + payoutValue);
+        playerId,
+      );
     }
 
     Matter.Composite.remove(this.engine.world, ball);

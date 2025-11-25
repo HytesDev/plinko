@@ -6,6 +6,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
+    "server": "node server/index.js",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "pnpm test:unit run && pnpm test:e2e",
@@ -25,7 +26,8 @@
     "matter-js": "^0.19.0",
     "svelte-persisted-store": "^0.9.2",
     "tailwind-merge": "^2.3.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "ws": "^8.17.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",

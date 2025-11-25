@@ -48,9 +48,13 @@
 </script>
 
 <!-- Height clamping in mobile: From 10px at 370px viewport width to 16px at 600px viewport width -->
-<div class="flex h-[clamp(10px,0.352px+2.609vw,16px)] w-full justify-center lg:h-7">
+<div class="flex h-[clamp(10px,0.352px+2.609vw,16px)] w-full justify-center px-2 lg:h-7">
   {#if $plinkoEngine}
-    <div class="flex gap-[1%]" style:width={`${($plinkoEngine.binsWidthPercentage ?? 0) * 100}%`}>
+    <div
+      class="grid w-full max-w-[min(100%,980px)] gap-[clamp(2px,0.4vw,8px)]"
+      style:grid-template-columns={`repeat(${binPayouts[$rowCount][$riskLevel].length}, minmax(0, 1fr))`}
+      style:max-width={`${($plinkoEngine.binsWidthPercentage ?? 1) * 100}%`}
+    >
       {#each binPayouts[$rowCount][$riskLevel] as payout, binIndex}
         <!-- Font-size clamping:
               - Mobile (< 1024px): From 6px at 370px viewport width to 8px at 600px viewport width
@@ -58,7 +62,7 @@
          -->
         <div
           use:initAnimation
-          class="flex min-w-0 flex-1 items-center justify-center rounded-sm text-[clamp(6px,2.784px+0.87vw,8px)] font-bold text-gray-950 shadow-[0_2px_var(--shadow-color)] lg:rounded-md lg:text-[clamp(10px,-16.944px+2.632vw,12px)] lg:shadow-[0_3px_var(--shadow-color)]"
+          class="flex min-w-0 items-center justify-center rounded-sm px-1.5 text-[clamp(6px,2.784px+0.87vw,8px)] font-bold text-gray-950 shadow-[0_2px_var(--shadow-color)] lg:rounded-md lg:px-2 lg:text-[clamp(10px,-16.944px+2.632vw,12px)] lg:shadow-[0_3px_var(--shadow-color)]"
           style:background-color={binColorsByRowCount[$rowCount].background[binIndex]}
           style:--shadow-color={binColorsByRowCount[$rowCount].shadow[binIndex]}
         >

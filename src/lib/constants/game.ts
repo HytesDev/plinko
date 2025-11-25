@@ -4,6 +4,8 @@ import { computeBinProbabilities } from '$lib/utils/numbers';
 
 export const LOCAL_STORAGE_KEY = {
   BALANCE: 'plinko_balance',
+  PLAYERS: 'plinko_players',
+  ACTIVE_PLAYER_ID: 'plinko_active_player_id',
   SETTINGS: {
     ANIMATION: 'plinko_settings_animation',
   },
@@ -18,6 +20,11 @@ export const rowCountOptions = [8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
  * Number of rows of pins the game supports.
  */
 export type RowCount = (typeof rowCountOptions)[number];
+
+/**
+ * Starting balance for every new player profile.
+ */
+export const defaultStartingBalance = 500;
 
 /**
  * Interval (in milliseconds) for placing auto bets.

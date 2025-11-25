@@ -1,47 +1,56 @@
 <script lang="ts">
-  import { balance } from '$lib/stores/game';
-  import { flyAndScale } from '$lib/utils/transitions';
-  import { Popover } from 'bits-ui';
+  import { defaultStartingBalance } from '$lib/constants/game';
+  import {
+    isMultiplayerConnected,
+    multiplayerConfigured,
+    requestBalanceReset,
+  } from '$lib/network/multiplayer';
+  import { balance, resetActivePlayer } from '$lib/stores/game';
+  import { formatCurrency } from '$lib/utils/numbers';
 
-  $: balanceFormatted = $balance.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  let resetError = '';
+  let isResetting = false;
 
-  const addMoneyAmounts = [100, 500, 1000];
+  $: balanceFormatted = formatCurrency($balance);
+
+  async function handleReset() {
+    if (isResetting) return;
+    resetError = '';
+    isResetting = true;
+
+    if (multiplayerConfigured && isMultiplayerConnected()) {
+      const { ok, reason } = await requestBalanceReset();
+      if (!ok) {
+        resetError = reason ?? 'Reset failed';
+      }
+    } else {
+      resetActivePlayer(defaultStartingBalance);
+    }
+
+    isResetting = false;
+  }
 </script>
 
-<div class="flex overflow-hidden rounded-md">
+<div class="flex items-center gap-3">
   <div
-    class="flex gap-2 bg-slate-900 px-3 py-2 text-sm font-semibold tabular-nums text-white sm:text-base"
+    class="flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold tabular-nums text-white sm:text-base"
   >
-    <span class="select-none text-gray-500">$</span>
-    <span class="min-w-16 text-right">
-      {balanceFormatted}
-    </span>
+    <span class="text-xs uppercase tracking-wide text-slate-500">Balance</span>
+    <span class="min-w-16 text-right">{balanceFormatted}</span>
   </div>
-  <Popover.Root>
-    <Popover.Trigger
-      class="bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 active:bg-blue-700 sm:text-base"
+  <div class="flex items-center gap-2">
+    <button
+      on:click={handleReset}
+      disabled={isResetting}
+      class="rounded-md bg-yellow-400 px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-yellow-300 active:bg-yellow-500 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300 sm:text-sm"
     >
-      Add
-    </Popover.Trigger>
-    <Popover.Content
-      transition={flyAndScale}
-      sideOffset={8}
-      class="z-30 max-w-lg space-y-2 rounded-md bg-slate-600 p-3"
-    >
-      <p class="text-sm font-medium text-gray-200">Add money</p>
-      <div class="flex gap-2">
-        {#each addMoneyAmounts as amount}
-          <button
-            on:click={() => ($balance += amount)}
-            class="touch-manipulation rounded-md bg-green-500 px-3 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-green-400 active:bg-green-600 disabled:bg-neutral-600 disabled:text-neutral-400"
-          >
-            +${amount}
-          </button>
-        {/each}
-      </div>
-    </Popover.Content>
-  </Popover.Root>
+      Reset to ${defaultStartingBalance}
+    </button>
+    {#if isResetting}
+      <span class="text-xs text-slate-300">Resetting…</span>
+    {/if}
+  </div>
+  {#if resetError}
+    <p class="text-xs text-red-300">{resetError}</p>
+  {/if}
 </div>

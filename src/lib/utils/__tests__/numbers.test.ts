@@ -62,6 +62,7 @@ describe('formatCurrency', () => {
       [123456.789, '$123,456.79'],
       [0, '$0.00'],
       [-1234.567, '-$1,234.57'],
+      [2400000000, '$2.4B'],
     ];
 
     testCases.forEach(([input, expectedOutput]) => {

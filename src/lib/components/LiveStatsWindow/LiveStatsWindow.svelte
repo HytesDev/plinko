@@ -8,6 +8,7 @@
   import DraggableWindow from '../ui/DraggableWindow.svelte';
   import Profit from './Profit.svelte';
   import ProfitHistoryChart from './ProfitHistoryChart.svelte';
+  import WinFeed from './WinFeed.svelte';
 
   function resetLiveStats() {
     $winRecords = [];
@@ -51,6 +52,7 @@
     <div class="flex flex-col gap-4">
       <Profit />
       <ProfitHistoryChart />
+      <WinFeed />
     </div>
   </DraggableWindow>
 {/if}

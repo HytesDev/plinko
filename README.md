@@ -56,3 +56,22 @@ No download, no registration - just instant fun in your browser!
 Enjoy playing Plinko! Share with friends for more fun.
 
 [Play Plinko Game Now](https://plinko-game-online.github.io/)
+
+## 🌐 Multiplayer (self-hosted)
+
+This repo now ships with a lightweight WebSocket server so you and friends can share balances and wins in real time.
+
+- Start server locally: `pnpm install` then `pnpm server` (listens on `ws://localhost:4173/ws`).
+- Point the client to your server by setting `VITE_MULTIPLAYER_WS_URL` (for example `ws://your-domain.com/ws`) before running `pnpm dev` or `pnpm build`.
+- Reverse proxy example for nginx:
+
+```nginx
+location /ws {
+  proxy_pass http://127.0.0.1:4173;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+```
+
+If the env var is missing the game falls back to local play only.

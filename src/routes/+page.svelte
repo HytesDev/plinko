@@ -2,27 +2,20 @@
   import logo from '$lib/assets/logo.svg';
   import Balance from '$lib/components/Balance.svelte';
   import LiveStatsWindow from '$lib/components/LiveStatsWindow/LiveStatsWindow.svelte';
+  import Leaderboard from '$lib/components/Leaderboard.svelte';
+  import MultiplayerStatus from '$lib/components/MultiplayerStatus.svelte';
+  import NamePrompt from '$lib/components/NamePrompt.svelte';
   import Plinko from '$lib/components/Plinko';
   import SettingsWindow from '$lib/components/SettingsWindow';
   import Sidebar from '$lib/components/Sidebar';
-  import { setBalanceFromLocalStorage, writeBalanceToLocalStorage } from '$lib/utils/game';
-  import GitHubLogo from 'phosphor-svelte/lib/GithubLogo';
-  import { onMount } from 'svelte';
-
-  onMount(() => {
-    setBalanceFromLocalStorage();
-  });
 </script>
-
-<svelte:window on:beforeunload={writeBalanceToLocalStorage} />
 
 <div class="relative flex min-h-dvh w-full flex-col">
   <nav class="sticky top-0 z-10 w-full bg-gray-700 px-5 drop-shadow-lg">
-    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between">
+    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4">
       <img src={logo} alt="logo" class="h-6 sm:h-7" />
-      <div class="mx-auto">
-        <Balance />
-      </div>
+      <MultiplayerStatus />
+      <Balance />
     </div>
   </nav>
 
@@ -34,39 +27,16 @@
           <Plinko />
         </div>
       </div>
+      <div class="mt-6">
+        <Leaderboard />
+      </div>
     </div>
   </div>
 
   <SettingsWindow />
   <LiveStatsWindow />
+  <NamePrompt />
 
-  <footer class="px-5 pb-4 pt-16">
-    <div class="mx-auto max-w-[40rem]">
-      <div aria-hidden="true" class="h-[1px] bg-slate-700" />
-      <div class="flex items-center justify-between p-2">
-        <p class="text-sm text-slate-500">
-          <a
-            href="/"
-            target="_blank"
-            rel="noreferrer"
-            class=" text-cyan-600 transition hover:text-cyan-500"
-          >
-            Plinko Game Online
-          </a>
-          © 2024
-        </p>
-        <a
-          href="https://github.com/plinko-game-online/plinko-game-online.github.io"
-          target="_blank"
-          rel="noreferrer"
-          class="flex items-center gap-1 p-1 text-sm text-slate-500 transition hover:text-cyan-500"
-        >
-          <GitHubLogo class="size-4" weight="bold" />
-          <span>Source Code</span>
-        </a>
-      </div>
-    </div>
-  </footer>
 </div>
 
 <style>

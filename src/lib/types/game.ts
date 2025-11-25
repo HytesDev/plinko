@@ -22,7 +22,13 @@ export enum RiskLevel {
  * When a ball enters a bin, its record is removed.
  */
 export type BetAmountOfExistingBalls = {
-  [ballId: number]: number;
+  [ballId: number]: {
+    betAmount: number;
+    /**
+     * Player ID of who dropped the ball.
+     */
+    playerId: string;
+  };
 };
 
 export type WinRecord = {
@@ -56,4 +62,15 @@ export type WinRecord = {
    * Payout value minus the bet amount.
    */
   profit: number;
+};
+
+export type PlayerState = {
+  id: string;
+  name: string;
+  balance: number;
+  winRecords: WinRecord[];
+  /**
+   * History of total profits. Starts with 0.
+   */
+  totalProfitHistory: number[];
 };

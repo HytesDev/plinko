@@ -9,6 +9,13 @@
     riskLevel,
     rowCount,
   } from '$lib/stores/game';
+  import {
+    connectionError,
+    connectionStatus,
+    isMultiplayerConnected,
+    multiplayerConfigured,
+    requestBet,
+  } from '$lib/network/multiplayer';
   import { isGameSettingsOpen, isLiveStatsOpen } from '$lib/stores/layout';
   import { BetMode, RiskLevel } from '$lib/types';
   import { flyAndScale } from '$lib/utils/transitions';
@@ -36,13 +43,21 @@
   let autoBetsLeft: number | null = null;
 
   let autoBetInterval: ReturnType<typeof setInterval> | null = null;
+  let autoBetInFlight = false;
+  let isBetting = false;
+  let lastBetError = '';
 
   $: isBetAmountNegative = $betAmount < 0;
   $: isBetExceedBalance = $betAmount > $balance;
   $: isAutoBetInputNegative = autoBetInput < 0;
 
   $: isDropBallDisabled =
-    $plinkoEngine === null || isBetAmountNegative || isBetExceedBalance || isAutoBetInputNegative;
+    $plinkoEngine === null ||
+    isBetAmountNegative ||
+    isBetExceedBalance ||
+    isAutoBetInputNegative ||
+    isBetting ||
+    ($connectionStatus === 'connecting' || (multiplayerConfigured && $connectionStatus !== 'connected'));
 
   $: hasOutstandingBalls = Object.keys($betAmountOfExistingBalls).length > 0;
 
@@ -61,29 +76,53 @@
       clearInterval(autoBetInterval);
       autoBetInterval = null;
     }
+    autoBetInFlight = false;
   }
 
-  function autoBetDropBall() {
-    if (isBetExceedBalance) {
+  async function dropWithServerBet() {
+    lastBetError = '';
+
+    if (multiplayerConfigured && !isMultiplayerConnected()) {
+      lastBetError = 'Waiting for multiplayer connection';
+      return false;
+    }
+
+    if (isMultiplayerConnected()) {
+      const result = await requestBet($betAmount);
+      if (!result.ok) {
+        lastBetError = result.reason ?? 'Bet rejected';
+        return false;
+      }
+    } else {
+      if (isBetExceedBalance) {
+        lastBetError = "You don't have enough balance";
+        return false;
+      }
+      $balance = parseFloat(($balance - $betAmount).toFixed(2));
+    }
+
+    $plinkoEngine?.dropBall();
+    return true;
+  }
+
+  async function autoBetDropBall() {
+    if (autoBetInFlight) return;
+    autoBetInFlight = true;
+    const success = await dropWithServerBet();
+
+    if (!success) {
       resetAutoBetInterval();
+      autoBetInFlight = false;
       return;
     }
 
-    // Infinite mode
-    if (autoBetsLeft === null) {
-      $plinkoEngine?.dropBall();
-      return;
-    }
-
-    // Finite mode
-    if (autoBetsLeft > 0) {
-      $plinkoEngine?.dropBall();
+    if (autoBetsLeft !== null) {
       autoBetsLeft -= 1;
+      if (autoBetsLeft <= 0) {
+        resetAutoBetInterval();
+      }
     }
-    if (autoBetsLeft === 0 && autoBetInterval !== null) {
-      resetAutoBetInterval();
-      return;
-    }
+    autoBetInFlight = false;
   }
 
   const handleAutoBetInputFocusOut: FormEventHandler<HTMLInputElement> = (e) => {
@@ -96,9 +135,13 @@
     }
   };
 
-  function handleBetClick() {
+  async function handleBetClick() {
+    if (isBetting) return;
+
     if (betMode === BetMode.MANUAL) {
-      $plinkoEngine?.dropBall();
+      isBetting = true;
+      await dropWithServerBet();
+      isBetting = false;
     } else if (autoBetInterval === null) {
       autoBetsLeft = autoBetInput === 0 ? null : autoBetInput;
       autoBetInterval = setInterval(autoBetDropBall, autoBetIntervalMs);
@@ -261,6 +304,9 @@
       Stop Autobet
     {/if}
   </button>
+  {#if lastBetError || $connectionError}
+    <p class="text-sm text-red-300">{lastBetError || $connectionError}</p>
+  {/if}
 
   <div class="mt-auto pt-5">
     <div class="flex items-center gap-4 border-t border-slate-600 pt-3">
