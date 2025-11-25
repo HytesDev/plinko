@@ -15,6 +15,7 @@ const tokensByPlayerId = new Map();
 const storedPlayersByToken = new Map();
 const adminPlayerIds = new Set();
 const bannedTokens = new Map(); // token -> timestamp (ms)
+const bannedMeta = new Map(); // token -> { name, until }
 const winFeed = [];
 const chatFeed = [];
 
@@ -189,6 +190,7 @@ function handleJoin(name, socket, providedToken) {
     return null;
   } else if (banExpiry && banExpiry <= Date.now()) {
     bannedTokens.delete(token);
+    bannedMeta.delete(token);
   }
 
   if (player) {
@@ -358,6 +360,7 @@ function handleAdminAction(msg, socket) {
       const banUntil = durationMinutes > 0 ? now + durationMinutes * 60_000 : now + 60_000;
       if (token) {
         bannedTokens.set(token, banUntil);
+        bannedMeta.set(token, { name: player.name, until: banUntil });
         storedPlayersByToken.delete(token);
       }
       players.delete(targetPlayerId);
@@ -397,6 +400,7 @@ function handleAdminAction(msg, socket) {
         return;
       }
       bannedTokens.delete(token);
+      bannedMeta.delete(token);
       sendAdminResult(socket, {
         type: 'admin_action_result',
         requestId,
@@ -494,6 +498,16 @@ function handleAdminAction(msg, socket) {
         players: getPlayersWithAdminFlag(),
         winFeed,
         chatFeed,
+      });
+      break;
+    }
+    case 'list_bans': {
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        bans: getBansWithMeta(),
       });
       break;
     }
@@ -597,5 +611,13 @@ function getPlayersWithAdminFlag() {
   return Array.from(players.values()).map((player) => ({
     ...player,
     isAdmin: adminPlayerIds.has(player.id),
+  }));
+}
+
+function getBansWithMeta() {
+  return Array.from(bannedTokens.entries()).map(([token, until]) => ({
+    token,
+    until,
+    name: bannedMeta.get(token)?.name || 'Unknown',
   }));
 }

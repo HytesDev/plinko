@@ -6,6 +6,7 @@
     adminError,
     adminClearChat,
     adminUnbanToken,
+    adminListBans,
     adminRemovePlayer,
     adminRenamePlayer,
     adminResetPlayer,
@@ -13,6 +14,7 @@
     adminSetBalance,
     authenticateAdmin,
   } from '$lib/network/multiplayer';
+  import { bannedList } from '$lib/network/multiplayer';
   import { players } from '$lib/stores/game';
   import { isAdminPanelOpen } from '$lib/stores/layout';
   import { formatCurrency } from '$lib/utils/numbers';
@@ -25,6 +27,7 @@
   let banInputs: Record<string, string> = {};
   let unbanToken = '';
   let isSaving = false;
+  let bansLoaded = false;
 
   $: {
     const activeIds = new Set($players.map((player) => player.id));
@@ -59,6 +62,10 @@
     actionMessage = '';
     await authenticateAdmin(password.trim());
     isSaving = false;
+    if ($adminAuthState === 'authorized') {
+      await adminListBans();
+      bansLoaded = true;
+    }
   }
 
   async function handleRename(playerId: string) {
@@ -137,6 +144,7 @@
     const result = await adminBanPlayer(playerId, minutes);
     if (result.ok) {
       actionMessage = `Player banned for ${minutes}m`;
+      await adminListBans();
     }
     isSaving = false;
   }
@@ -154,13 +162,26 @@
     if (result.ok) {
       actionMessage = 'Token unbanned';
       unbanToken = '';
+      await adminListBans();
     }
     isSaving = false;
+  }
+
+  $: if ($adminAuthState === 'authorized' && $isAdminPanelOpen && !bansLoaded) {
+    adminListBans();
+    bansLoaded = true;
+  }
+
+  $: if (!$isAdminPanelOpen) {
+    bansLoaded = false;
   }
 </script>
 
 {#if $isAdminPanelOpen}
-  <DraggableWindow class="fixed bottom-6 right-6 w-[28rem] max-w-[95vw]" onClose={closePanel}>
+  <DraggableWindow
+    class="fixed left-1/2 top-1/2 w-[32rem] max-w-[95vw] -translate-x-1/2 -translate-y-1/2"
+    onClose={closePanel}
+  >
     <svelte:fragment slot="title">
       <div class="flex items-center gap-2 text-sm font-semibold text-white">
         <span class="rounded-sm bg-cyan-400 px-2 py-0.5 text-slate-900">Admin</span>
@@ -303,6 +324,37 @@
             >
               Unban
             </button>
+          </div>
+
+          <div class="mt-4 rounded-md border border-slate-700 bg-slate-900/60 p-3">
+            <div class="flex items-center justify-between">
+              <p class="text-xs uppercase tracking-wide text-slate-400">Banned users</p>
+              <span class="text-xs text-slate-500">{$bannedList.length}</span>
+            </div>
+            {#if $bannedList.length === 0}
+              <p class="mt-2 text-xs text-slate-400">No bans active.</p>
+            {:else}
+              <div class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1">
+                {#each $bannedList as ban}
+                  <div class="rounded-sm bg-slate-800 px-2 py-2 text-xs text-white">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-semibold">{ban.name}</span>
+                      <button
+                        class="rounded-sm bg-emerald-500 px-2 py-1 text-[11px] font-semibold text-slate-900 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        on:click={() => { unbanToken = ban.token; handleUnban(); }}
+                        disabled={isSaving}
+                      >
+                        Unban
+                      </button>
+                    </div>
+                    <p class="mt-1 break-all text-[11px] text-slate-300">Token: {ban.token}</p>
+                    <p class="text-[11px] text-slate-400">
+                      Until: {new Date(ban.until).toLocaleString()}
+                    </p>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         </div>
       </div>

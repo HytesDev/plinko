@@ -31,6 +31,7 @@ export const chatFeed = writable<
   { id: string; playerId: string; playerName: string; text: string; timestamp: number }[]
 >([]);
 export const bannedUntil = writable<number | null>(null);
+export const bannedList = writable<{ token: string; name: string; until: number }[]>([]);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
@@ -307,18 +308,22 @@ function handleMessage(message: any) {
       break;
     }
     case 'admin_action_result': {
-      const { requestId, ok, reason, players: playersList, winFeed: feed } = message as {
+      const { requestId, ok, reason, players: playersList, winFeed: feed, bans } = message as {
         requestId?: string;
         ok: boolean;
         reason?: string;
         players?: PlayerState[];
         winFeed?: WinFeedEntry[];
+        bans?: { token: string; name: string; until: number }[];
       };
       if (Array.isArray(playersList)) {
         setPlayersState(playersList, get(activePlayerId));
       }
       if (Array.isArray(feed)) {
         winFeed.set(feed);
+      }
+      if (Array.isArray(bans)) {
+        bannedList.set(bans);
       }
       if (requestId && pendingAdminRequests.has(requestId)) {
         pendingAdminRequests.get(requestId)?.({ ok, reason });
@@ -597,4 +602,10 @@ export async function adminUnbanToken(token: string) {
   const authed = await requireAdminAuth();
   if (!authed) return { ok: false, reason: 'Not authorized' };
   return adminAction('unban_token', { token });
+}
+
+export async function adminListBans() {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('list_bans', {});
 }

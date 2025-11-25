@@ -1,6 +1,6 @@
 <script lang="ts">
   import { bannedUntil, connectionStatus } from '$lib/network/multiplayer';
-  import { derived } from 'svelte/store';
+  import { derived, get } from 'svelte/store';
   import { onDestroy, onMount } from 'svelte';
   import ShieldCheck from 'phosphor-svelte/lib/ShieldCheck';
 
@@ -14,7 +14,7 @@
   let timer: ReturnType<typeof setInterval> | null = null;
 
   function updateCountdown() {
-    const until = $bannedUntil;
+    const until = get(bannedUntil);
     if (!until) {
       countdown = '';
       return;
