@@ -66,6 +66,20 @@ function getDefaultName() {
   return generateRandomPlayerName(getExistingNames(true));
 }
 
+function formatDuration(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600)
+    .toString()
+    .padStart(2, '0');
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = Math.floor(totalSeconds % 60)
+    .toString()
+    .padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
+
 function getOrCreateToken() {
   if (typeof window === 'undefined') return null;
   if (playerToken) return playerToken;
@@ -126,6 +140,7 @@ function connect(name: string) {
 
   socket.addEventListener('open', () => {
     connectionStatus.set('connected');
+    connectionError.set(null);
     socket?.send(
       JSON.stringify({
         type: 'join',
@@ -176,6 +191,7 @@ function handleMessage(message: any) {
       }
       getOrCreateToken();
       bannedUntil.set(null);
+      connectionError.set(null);
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
       }
@@ -200,6 +216,7 @@ function handleMessage(message: any) {
       setPlayersState(players ?? [], get(activePlayerId));
       syncLocalPlayerName(players);
       bannedUntil.set(null);
+      connectionError.set(null);
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
       }
@@ -219,13 +236,16 @@ function handleMessage(message: any) {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(BAN_UNTIL_STORAGE_KEY, `${expiresAt}`);
       }
+      const msLeft = expiresAt - Date.now();
+      connectionError.set(`You are banned for ${formatDuration(msLeft)}`);
       connectionStatus.set('disabled');
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (socket) {
         socket.close();
       }
-      reconnectTimer = setTimeout(() => {
-        connect(get(playerName));
-      }, 15000);
       break;
     }
     case 'unbanned': {
@@ -239,6 +259,7 @@ function handleMessage(message: any) {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
       }
+      connectionError.set(null);
       if (matches) {
         connect(get(playerName));
       }
