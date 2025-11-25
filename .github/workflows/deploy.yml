@@ -37,6 +37,8 @@ jobs:
 
       - name: Build
         run: pnpm run build
+        env:
+          VITE_MULTIPLAYER_WS_URL: wss://plinko.hytes.dev/ws
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
