@@ -80,6 +80,11 @@ function formatDuration(ms: number) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function isCurrentlyBanned() {
+  const until = get(bannedUntil);
+  return Boolean(until && until > Date.now());
+}
+
 function getOrCreateToken() {
   if (typeof window === 'undefined') return null;
   if (playerToken) return playerToken;
@@ -96,6 +101,7 @@ function hydrateBanState() {
   if (expiresAt && expiresAt > Date.now()) {
     bannedUntil.set(expiresAt);
     connectionStatus.set('disabled');
+    connectionError.set(`You are banned for ${formatDuration(expiresAt - Date.now())}`);
   } else {
     bannedUntil.set(null);
     window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
@@ -130,6 +136,12 @@ export function initMultiplayer() {
 
 function connect(name: string) {
   if (!WS_URL || typeof window === 'undefined') return;
+  if (isCurrentlyBanned()) {
+    connectionStatus.set('disabled');
+    const msLeft = (get(bannedUntil) ?? Date.now()) - Date.now();
+    connectionError.set(`You are banned for ${formatDuration(msLeft)}`);
+    return;
+  }
   getOrCreateToken();
   connectionError.set(null);
   if (reconnectTimer) {
@@ -158,6 +170,13 @@ function connect(name: string) {
   });
 
   socket.addEventListener('close', () => {
+    if (isCurrentlyBanned()) {
+      connectionStatus.set('disabled');
+      connectionError.set(
+        `You are banned for ${formatDuration((get(bannedUntil) ?? Date.now()) - Date.now())}`,
+      );
+      return;
+    }
     connectionStatus.set('error');
     connectionError.set('Disconnected from multiplayer server, retrying…');
     reconnectTimer = setTimeout(() => connect(lastRequestedName || name), 1500);
