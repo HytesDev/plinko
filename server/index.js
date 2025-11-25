@@ -14,6 +14,7 @@ const socketsByPlayer = new Map();
 const tokensByPlayerId = new Map();
 const storedPlayersByToken = new Map();
 const adminPlayerIds = new Set();
+const bannedTokens = new Map(); // token -> timestamp (ms)
 const winFeed = [];
 const chatFeed = [];
 
@@ -28,10 +29,14 @@ function makePlayer(name) {
   return {
     id: uuidv4(),
     name: name || 'Player',
-    balance: STARTING_BALANCE,
+    balance: toCents(STARTING_BALANCE),
     winRecords: [],
     totalProfitHistory: [0],
   };
+}
+
+function toCents(value) {
+  return Math.round(Number(value) * 100) / 100;
 }
 
 function persistPlayerById(playerId) {
@@ -107,7 +112,19 @@ function handleBet(playerId, amount, requestId, socket) {
     );
     return;
   }
-  if (player.balance < amount) {
+  const wager = toCents(Number(amount));
+  if (!Number.isFinite(wager) || wager <= 0) {
+    socket.send(
+      JSON.stringify({
+        type: 'bet_result',
+        requestId,
+        ok: false,
+        reason: 'Invalid bet',
+      }),
+    );
+    return;
+  }
+  if (player.balance < wager) {
     socket.send(
       JSON.stringify({
         type: 'bet_result',
@@ -119,7 +136,7 @@ function handleBet(playerId, amount, requestId, socket) {
     return;
   }
 
-  player.balance -= amount;
+  player.balance = toCents(player.balance - wager);
   socket.send(
     JSON.stringify({
       type: 'bet_result',
@@ -134,15 +151,24 @@ function handleWin(playerId, record) {
   const player = players.get(playerId);
   if (!player) return;
 
-  player.winRecords.push(record);
+  const normalizedRecord = {
+    ...record,
+    profit: toCents(record.profit),
+    payout: {
+      ...record.payout,
+      value: toCents(record.payout.value),
+    },
+  };
+
+  player.winRecords.push(normalizedRecord);
   if (player.winRecords.length > MAX_WIN_RECORDS) {
     player.winRecords = player.winRecords.slice(-MAX_WIN_RECORDS);
   }
   const lastTotal = player.totalProfitHistory.at(-1) ?? 0;
-  player.totalProfitHistory.push(lastTotal + record.profit);
-  player.balance += record.payout.value;
+  player.totalProfitHistory.push(toCents(lastTotal + normalizedRecord.profit));
+  player.balance = toCents(player.balance + normalizedRecord.payout.value);
 
-  addWinToFeed(player, record);
+  addWinToFeed(player, normalizedRecord);
   syncPlayers();
 }
 
@@ -150,6 +176,20 @@ function handleJoin(name, socket, providedToken) {
   let token = providedToken && typeof providedToken === 'string' ? providedToken : null;
   const cachedPlayer = token ? storedPlayersByToken.get(token) : null;
   let player = cachedPlayer ? structuredClone(cachedPlayer) : null;
+
+  const banExpiry = token ? bannedTokens.get(token) : null;
+  if (banExpiry && banExpiry > Date.now()) {
+    socket.send(
+      JSON.stringify({
+        type: 'banned',
+        until: banExpiry,
+      }),
+    );
+    socket.close(4003, 'Banned');
+    return null;
+  } else if (banExpiry && banExpiry <= Date.now()) {
+    bannedTokens.delete(token);
+  }
 
   if (player) {
     player.name = ensureUniqueName(player.name, player.id);
@@ -210,6 +250,7 @@ function handleReset(playerId, socket, requestId) {
   player.balance = STARTING_BALANCE;
   player.winRecords = [];
   player.totalProfitHistory = [0];
+  player.balance = toCents(player.balance);
 
   socket.send(
     JSON.stringify({
@@ -288,7 +329,7 @@ function handleAdminAction(msg, socket) {
   const targetPlayerId = msg.playerId;
   const player = targetPlayerId ? players.get(targetPlayerId) : null;
 
-  if (['rename_player', 'set_balance', 'reset_player', 'remove_player'].includes(action)) {
+  if (['rename_player', 'set_balance', 'reset_player', 'remove_player', 'ban_player'].includes(action)) {
     if (!player) {
       sendAdminResult(socket, {
         type: 'admin_action_result',
@@ -301,6 +342,49 @@ function handleAdminAction(msg, socket) {
   }
 
   switch (action) {
+    case 'ban_player': {
+      if (!player) {
+        sendAdminResult(socket, {
+          type: 'admin_action_result',
+          requestId,
+          ok: false,
+          reason: 'Player not found',
+        });
+        return;
+      }
+      const token = tokensByPlayerId.get(targetPlayerId);
+      const durationMinutes = Number(msg.minutes) || 0;
+      const now = Date.now();
+      const banUntil = durationMinutes > 0 ? now + durationMinutes * 60_000 : now + 60_000;
+      if (token) {
+        bannedTokens.set(token, banUntil);
+        storedPlayersByToken.delete(token);
+      }
+      players.delete(targetPlayerId);
+      tokensByPlayerId.delete(targetPlayerId);
+      adminPlayerIds.delete(targetPlayerId);
+      const targetSocket = socketsByPlayer.get(targetPlayerId);
+      socketsByPlayer.delete(targetPlayerId);
+      if (targetSocket) {
+        targetSocket.send(
+          JSON.stringify({
+            type: 'banned',
+            until: banUntil,
+          }),
+        );
+        targetSocket.close(4003, 'Banned');
+      }
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        playerId: targetPlayerId,
+        until: banUntil,
+      });
+      syncPlayers();
+      break;
+    }
     case 'rename_player': {
       const nextName = ensureUniqueName((msg.name || '').slice(0, 24), targetPlayerId);
       player.name = nextName;
@@ -328,6 +412,7 @@ function handleAdminAction(msg, socket) {
         return;
       }
       player.balance = nextBalance;
+      player.balance = toCents(player.balance);
       persistPlayerById(player.id);
       sendAdminResult(socket, {
         type: 'admin_action_result',
@@ -344,6 +429,7 @@ function handleAdminAction(msg, socket) {
       player.balance = STARTING_BALANCE;
       player.winRecords = [];
       player.totalProfitHistory = [0];
+      player.balance = toCents(player.balance);
       persistPlayerById(player.id);
       sendAdminResult(socket, {
         type: 'admin_action_result',

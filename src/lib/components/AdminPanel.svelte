@@ -8,6 +8,7 @@
     adminRemovePlayer,
     adminRenamePlayer,
     adminResetPlayer,
+    adminBanPlayer,
     adminSetBalance,
     authenticateAdmin,
   } from '$lib/network/multiplayer';
@@ -20,6 +21,7 @@
   let actionMessage = '';
   let renameInputs: Record<string, string> = {};
   let balanceInputs: Record<string, string> = {};
+  let banInputs: Record<string, string> = {};
   let isSaving = false;
 
   $: {
@@ -30,12 +32,16 @@
     balanceInputs = Object.fromEntries(
       Object.entries(balanceInputs).filter(([id]) => activeIds.has(id)),
     );
+    banInputs = Object.fromEntries(Object.entries(banInputs).filter(([id]) => activeIds.has(id)));
     for (const player of $players) {
       if (!Object.prototype.hasOwnProperty.call(renameInputs, player.id)) {
         renameInputs = { ...renameInputs, [player.id]: player.name };
       }
       if (!Object.prototype.hasOwnProperty.call(balanceInputs, player.id)) {
         balanceInputs = { ...balanceInputs, [player.id]: player.balance.toString() };
+      }
+      if (!Object.prototype.hasOwnProperty.call(banInputs, player.id)) {
+        banInputs = { ...banInputs, [player.id]: '60' };
       }
     }
   }
@@ -112,6 +118,23 @@
       renameInputs = restNames;
       balanceInputs = restBalances;
       actionMessage = 'Player removed';
+    }
+    isSaving = false;
+  }
+
+  async function handleBan(playerId: string) {
+    isSaving = true;
+    actionMessage = '';
+    adminError.set(null);
+    const minutes = parseInt(banInputs[playerId] ?? '0', 10);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      adminError.set('Enter ban minutes greater than 0.');
+      isSaving = false;
+      return;
+    }
+    const result = await adminBanPlayer(playerId, minutes);
+    if (result.ok) {
+      actionMessage = `Player banned for ${minutes}m`;
     }
     isSaving = false;
   }
@@ -200,6 +223,25 @@
                       Remove
                     </button>
                   </div>
+                  <label class="mt-1 block text-xs text-slate-300">
+                    Ban (minutes)
+                    <div class="mt-1 flex gap-2">
+                      <input
+                        class="w-24 rounded-sm bg-slate-900 px-2 py-1 text-sm text-white outline-none ring-1 ring-slate-700 focus:ring-red-400"
+                        bind:value={banInputs[player.id]}
+                        type="number"
+                        min="1"
+                        step="1"
+                      />
+                      <button
+                        class="rounded-sm bg-red-600 px-3 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        on:click={() => handleBan(player.id)}
+                        disabled={isSaving}
+                      >
+                        Ban
+                      </button>
+                    </div>
+                  </label>
                 </div>
               </div>
             {/each}

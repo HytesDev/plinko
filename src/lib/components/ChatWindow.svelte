@@ -56,7 +56,7 @@
 
 {#if $isChatOpen}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <DraggableWindow class="w-[30rem] max-w-full" onClose={closePanel}>
+    <DraggableWindow class="w-[34rem] max-w-full" onClose={closePanel}>
       <svelte:fragment slot="title">
         <div class="flex flex-col gap-1">
           <div class="flex items-center gap-2 text-sm font-semibold text-white">

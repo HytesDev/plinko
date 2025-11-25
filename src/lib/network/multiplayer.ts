@@ -17,6 +17,7 @@ const WS_URL = import.meta.env.VITE_MULTIPLAYER_WS_URL;
 const NAME_STORAGE_KEY = 'plinko_mp_name';
 const NAME_PROMPT_SEEN_KEY = 'plinko_mp_name_seen';
 const TOKEN_STORAGE_KEY = 'plinko_mp_token';
+const BAN_UNTIL_STORAGE_KEY = 'plinko_mp_ban_until';
 
 export const connectionStatus = writable<ConnectionStatus>('disabled');
 export const connectionError = writable<string | null>(null);
@@ -29,6 +30,7 @@ const pendingRename = writable<string | null>(null);
 export const chatFeed = writable<
   { id: string; playerId: string; playerName: string; text: string; timestamp: number }[]
 >([]);
+export const bannedUntil = writable<number | null>(null);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
@@ -65,6 +67,19 @@ function getOrCreateToken() {
   return playerToken;
 }
 
+function hydrateBanState() {
+  if (typeof window === 'undefined') return;
+  const stored = window.localStorage.getItem(BAN_UNTIL_STORAGE_KEY);
+  const expiresAt = stored ? Number(stored) : null;
+  if (expiresAt && expiresAt > Date.now()) {
+    bannedUntil.set(expiresAt);
+    connectionStatus.set('disabled');
+  } else {
+    bannedUntil.set(null);
+    window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
+  }
+}
+
 export function initMultiplayer() {
   if (typeof window === 'undefined') {
     return;
@@ -77,6 +92,11 @@ export function initMultiplayer() {
   );
   playerName.set(initialName);
   getOrCreateToken();
+  hydrateBanState();
+  if (get(bannedUntil)) {
+    connectionStatus.set('disabled');
+    return;
+  }
   shouldPromptForName.set(
     Boolean(WS_URL) && !storedName && !window.localStorage.getItem(NAME_PROMPT_SEEN_KEY),
   );
@@ -92,6 +112,10 @@ export function initMultiplayer() {
 
 function connect(name: string) {
   if (!WS_URL || typeof window === 'undefined') return;
+  if (get(bannedUntil)) {
+    connectionStatus.set('disabled');
+    return;
+  }
   getOrCreateToken();
   connectionError.set(null);
   if (reconnectTimer) {
@@ -178,6 +202,19 @@ function handleMessage(message: any) {
         chatFeed.set(serverChat);
       }
       triggerPendingRename();
+      break;
+    }
+    case 'banned': {
+      const { until } = message as { until?: number };
+      const expiresAt = until && Number.isFinite(until) ? Number(until) : Date.now() + 60_000;
+      bannedUntil.set(expiresAt);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(BAN_UNTIL_STORAGE_KEY, `${expiresAt}`);
+      }
+      connectionStatus.set('disabled');
+      if (socket) {
+        socket.close();
+      }
       break;
     }
     case 'bet_result': {
@@ -548,4 +585,10 @@ export async function adminClearChat() {
   const authed = await requireAdminAuth();
   if (!authed) return { ok: false, reason: 'Not authorized' };
   return adminAction('clear_chat', {});
+}
+
+export async function adminBanPlayer(playerId: string, minutes: number) {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('ban_player', { playerId, minutes });
 }

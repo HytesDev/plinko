@@ -99,7 +99,7 @@
         lastBetError = "You don't have enough balance";
         return false;
       }
-      $balance = parseFloat(($balance - $betAmount).toFixed(2));
+      $balance = Math.round(($balance - $betAmount) * 100) / 100;
     }
 
     $plinkoEngine?.dropBall();

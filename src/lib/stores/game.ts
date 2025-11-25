@@ -8,7 +8,7 @@ import {
   type WinRecord,
 } from '$lib/types';
 import { interpolateRgbColors } from '$lib/utils/colors';
-import { countValueOccurrences } from '$lib/utils/numbers';
+import { countValueOccurrences, roundToCents } from '$lib/utils/numbers';
 import { ensureUniquePlayerName, generateRandomPlayerName } from '$lib/utils/playerNames';
 import { derived, get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
@@ -137,7 +137,7 @@ export function createPlayer(
   return {
     id: uuidv4(),
     name: ensureUniquePlayerName(name, existingNames),
-    balance: startingBalance,
+    balance: roundToCents(startingBalance),
     winRecords: [],
     totalProfitHistory: [0],
   };
@@ -149,12 +149,12 @@ function normalizePlayerState(player: PlayerState): PlayerState {
     name: player.name || 'Player',
     balance:
       typeof player.balance === 'number' && !Number.isNaN(player.balance)
-        ? player.balance
-        : defaultStartingBalance,
+        ? roundToCents(player.balance)
+        : roundToCents(defaultStartingBalance),
     winRecords: Array.isArray(player.winRecords) ? player.winRecords : [],
     totalProfitHistory:
       Array.isArray(player.totalProfitHistory) && player.totalProfitHistory.length
-        ? player.totalProfitHistory
+        ? player.totalProfitHistory.map((value) => roundToCents(value))
         : [0],
     isAdmin: Boolean(player.isAdmin),
   };
@@ -227,14 +227,14 @@ export function resetPlayerStats(playerId: string) {
 export function applyBalanceDelta(playerId: string, delta: number) {
   updatePlayerById(playerId, (player) => ({
     ...player,
-    balance: player.balance + delta,
+    balance: roundToCents(player.balance + delta),
   }));
 }
 
 export function resetActivePlayer(startingBalance: number = defaultStartingBalance) {
   updateActivePlayer((player) => ({
     ...player,
-    balance: startingBalance,
+    balance: roundToCents(startingBalance),
     winRecords: [],
     totalProfitHistory: [0],
   }));
@@ -243,11 +243,13 @@ export function resetActivePlayer(startingBalance: number = defaultStartingBalan
 export function recordWinForPlayer(playerId: string, record: WinRecord) {
   updatePlayerById(playerId, (player) => {
     const lastTotalProfit = player.totalProfitHistory.at(-1) ?? 0;
+    const nextTotalProfit = roundToCents(lastTotalProfit + record.profit);
+    const nextBalance = roundToCents(player.balance + record.payout.value);
     return {
       ...player,
       winRecords: [...player.winRecords, record],
-      totalProfitHistory: [...player.totalProfitHistory, lastTotalProfit + record.profit],
-      balance: player.balance + record.payout.value,
+      totalProfitHistory: [...player.totalProfitHistory, nextTotalProfit],
+      balance: nextBalance,
     };
   });
 }

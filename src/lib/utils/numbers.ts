@@ -70,6 +70,13 @@ export function dotProduct(a: number[], b: number[]): number {
   return a.reduce((acc, value, index) => acc + value * b[index], 0);
 }
 
+/**
+ * Round to two decimal places to mimic currency precision.
+ */
+export function roundToCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function factorial(n: number): number {
   let result = 1;
   for (let i = 2; i <= n; i++) {

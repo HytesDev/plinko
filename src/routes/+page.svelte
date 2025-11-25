@@ -11,6 +11,7 @@
   import AdminPanel from '$lib/components/AdminPanel.svelte';
   import CreditsWindow from '$lib/components/CreditsWindow.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
+  import BannedOverlay from '$lib/components/BannedOverlay.svelte';
 </script>
 
 <div class="relative flex min-h-dvh w-full flex-col">
@@ -42,6 +43,7 @@
   <AdminPanel />
   <CreditsWindow />
   <ChatWindow />
+  <BannedOverlay />
 
 </div>
 
