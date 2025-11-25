@@ -8,6 +8,8 @@
   import Plinko from '$lib/components/Plinko';
   import SettingsWindow from '$lib/components/SettingsWindow';
   import Sidebar from '$lib/components/Sidebar';
+  import AdminPanel from '$lib/components/AdminPanel.svelte';
+  import { isAdminPanelOpen } from '$lib/stores/layout';
 </script>
 
 <div class="relative flex min-h-dvh w-full flex-col">
@@ -15,7 +17,15 @@
     <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4">
       <img src={logo} alt="logo" class="h-6 sm:h-7" />
       <MultiplayerStatus />
-      <Balance />
+      <div class="flex items-center gap-2">
+        <button
+          class="rounded-md bg-slate-900 px-3 py-1 text-xs font-semibold text-white transition hover:bg-slate-700 active:bg-slate-600"
+          on:click={() => isAdminPanelOpen.set(true)}
+        >
+          Admin
+        </button>
+        <Balance />
+      </div>
     </div>
   </nav>
 
@@ -36,6 +46,7 @@
   <SettingsWindow />
   <LiveStatsWindow />
   <NamePrompt />
+  <AdminPanel />
 
 </div>
 

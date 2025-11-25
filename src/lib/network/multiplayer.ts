@@ -20,12 +20,19 @@ export const connectionError = writable<string | null>(null);
 export const playerName = writable<string>('Player');
 export const winFeed = writable<WinFeedEntry[]>([]);
 export const shouldPromptForName = writable<boolean>(false);
+export const adminAuthState = writable<'locked' | 'pending' | 'authorized'>('locked');
+export const adminError = writable<string | null>(null);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
 let socket: WebSocket | null = null;
 const pendingBets = new Map<string, (result: { ok: boolean; reason?: string }) => void>();
 const pendingResets = new Map<string, (result: { ok: boolean; reason?: string }) => void>();
+const pendingAdminRequests = new Map<
+  string,
+  (result: { ok: boolean; reason?: string; [key: string]: unknown }) => void
+>();
+let adminPassword: string | null = null;
 
 function getDefaultName() {
   const suffix = Math.floor(Math.random() * 900 + 100);
@@ -168,6 +175,43 @@ function handleMessage(message: any) {
       }
       break;
     }
+    case 'admin_auth_result': {
+      const { ok, requestId, reason } = message as {
+        ok: boolean;
+        requestId?: string;
+        reason?: string;
+      };
+      adminAuthState.set(ok ? 'authorized' : 'locked');
+      adminError.set(ok ? null : reason ?? 'Invalid password');
+      if (requestId && pendingAdminRequests.has(requestId)) {
+        pendingAdminRequests.get(requestId)?.({ ok, reason });
+        pendingAdminRequests.delete(requestId);
+      }
+      break;
+    }
+    case 'admin_action_result': {
+      const { requestId, ok, reason, players: playersList, winFeed: feed } = message as {
+        requestId?: string;
+        ok: boolean;
+        reason?: string;
+        players?: PlayerState[];
+        winFeed?: WinFeedEntry[];
+      };
+      if (Array.isArray(playersList)) {
+        setPlayersState(playersList, get(activePlayerId));
+      }
+      if (Array.isArray(feed)) {
+        winFeed.set(feed);
+      }
+      if (requestId && pendingAdminRequests.has(requestId)) {
+        pendingAdminRequests.get(requestId)?.({ ok, reason });
+        pendingAdminRequests.delete(requestId);
+      }
+      if (!ok && reason) {
+        adminError.set(reason);
+      }
+      break;
+    }
     case 'error': {
       const { message: errorMessage } = message as { message?: string };
       connectionError.set(errorMessage ?? 'Server error');
@@ -277,4 +321,96 @@ function syncLocalPlayerName(playersList?: PlayerState[], activeId?: string | nu
     }
     shouldPromptForName.set(false);
   }
+}
+
+function sendAdminRequest(body: Record<string, unknown>) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return Promise.resolve({ ok: false, reason: 'Not connected to multiplayer' });
+  }
+  const requestId = uuidv4();
+
+  return new Promise<{ ok: boolean; reason?: string }>((resolve) => {
+    pendingAdminRequests.set(requestId, resolve);
+    socket?.send(
+      JSON.stringify({
+        requestId,
+        ...body,
+      }),
+    );
+
+    setTimeout(() => {
+      if (pendingAdminRequests.has(requestId)) {
+        pendingAdminRequests.delete(requestId);
+        resolve({ ok: false, reason: 'Admin request timed out' });
+      }
+    }, 3000);
+  });
+}
+
+export function authenticateAdmin(password: string) {
+  adminError.set(null);
+  adminAuthState.set('pending');
+  adminPassword = password;
+  return sendAdminRequest({
+    type: 'admin_auth',
+    password,
+  });
+}
+
+async function requireAdminAuth() {
+  if (!adminPassword) {
+    adminError.set('Enter admin password to unlock controls.');
+    adminAuthState.set('locked');
+    return false;
+  }
+  if (get(adminAuthState) !== 'authorized') {
+    const result = await authenticateAdmin(adminPassword);
+    return result.ok;
+  }
+  return true;
+}
+
+function adminAction(
+  action: 'rename_player' | 'set_balance' | 'reset_player' | 'remove_player',
+  payload: Record<string, unknown>,
+) {
+  if (!adminPassword) {
+    adminError.set('Enter admin password to unlock controls.');
+    return Promise.resolve({ ok: false, reason: 'Not authorized' });
+  }
+
+  return sendAdminRequest({
+    type: 'admin_action',
+    action,
+    password: adminPassword,
+    ...payload,
+  });
+}
+
+export async function adminRenamePlayer(playerId: string, name: string) {
+  const trimmed = name.trim().slice(0, 24);
+  if (!trimmed) {
+    return { ok: false, reason: 'Name is required' };
+  }
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('rename_player', { playerId, name: trimmed });
+}
+
+export async function adminSetBalance(playerId: string, balance: number) {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('set_balance', { playerId, balance });
+}
+
+export async function adminResetPlayer(playerId: string) {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('reset_player', { playerId });
+}
+
+export async function adminRemovePlayer(playerId: string) {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('remove_player', { playerId });
 }

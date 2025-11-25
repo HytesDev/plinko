@@ -6,6 +6,7 @@ const PORT = process.env.WS_PORT ? Number(process.env.WS_PORT) : 4173;
 const MAX_WIN_RECORDS = 200;
 const MAX_WIN_FEED = 50;
 const STARTING_BALANCE = 500;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'canEggAI';
 
 const players = new Map();
 const socketsByPlayer = new Map();
@@ -179,6 +180,138 @@ function handleReset(playerId, socket, requestId) {
   syncPlayers();
 }
 
+function sendAdminResult(socket, payload) {
+  socket.send(JSON.stringify(payload));
+}
+
+function handleAdminAuth(password, socket, requestId) {
+  const ok = password === ADMIN_PASSWORD;
+  sendAdminResult(socket, {
+    type: 'admin_auth_result',
+    requestId,
+    ok,
+    reason: ok ? undefined : 'Invalid password',
+  });
+}
+
+function handleAdminAction(msg, socket) {
+  const { action, password, requestId } = msg;
+  if (password !== ADMIN_PASSWORD) {
+    sendAdminResult(socket, {
+      type: 'admin_action_result',
+      requestId,
+      ok: false,
+      reason: 'Invalid password',
+    });
+    return;
+  }
+
+  const targetPlayerId = msg.playerId;
+  const player = targetPlayerId ? players.get(targetPlayerId) : null;
+
+  if (['rename_player', 'set_balance', 'reset_player', 'remove_player'].includes(action)) {
+    if (!player) {
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: false,
+        reason: 'Player not found',
+      });
+      return;
+    }
+  }
+
+  switch (action) {
+    case 'rename_player': {
+      const nextName = ensureUniqueName((msg.name || '').slice(0, 24), targetPlayerId);
+      player.name = nextName;
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        name: nextName,
+        playerId: targetPlayerId,
+      });
+      syncPlayers();
+      break;
+    }
+    case 'set_balance': {
+      const nextBalance = Number(msg.balance);
+      if (!Number.isFinite(nextBalance)) {
+        sendAdminResult(socket, {
+          type: 'admin_action_result',
+          requestId,
+          ok: false,
+          reason: 'Invalid balance value',
+        });
+        return;
+      }
+      player.balance = nextBalance;
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        playerId: targetPlayerId,
+        balance: player.balance,
+      });
+      syncPlayers();
+      break;
+    }
+    case 'reset_player': {
+      player.balance = STARTING_BALANCE;
+      player.winRecords = [];
+      player.totalProfitHistory = [0];
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        playerId: targetPlayerId,
+        balance: player.balance,
+      });
+      syncPlayers();
+      break;
+    }
+    case 'remove_player': {
+      players.delete(targetPlayerId);
+      const targetSocket = socketsByPlayer.get(targetPlayerId);
+      socketsByPlayer.delete(targetPlayerId);
+      if (targetSocket) {
+        targetSocket.close(4001, 'Removed by admin');
+      }
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        playerId: targetPlayerId,
+      });
+      syncPlayers();
+      break;
+    }
+    case 'list_players': {
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        players: Array.from(players.values()),
+        winFeed,
+      });
+      break;
+    }
+    default:
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: false,
+        reason: 'Unknown admin action',
+      });
+  }
+}
+
 wss.on('connection', (socket) => {
   let playerId = null;
 
@@ -226,6 +359,12 @@ wss.on('connection', (socket) => {
           }
           break;
         }
+        case 'admin_auth':
+          handleAdminAuth(msg.password, socket, msg.requestId);
+          break;
+        case 'admin_action':
+          handleAdminAction(msg, socket);
+          break;
         default:
           break;
       }
