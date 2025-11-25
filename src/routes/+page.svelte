@@ -9,8 +9,7 @@
   import SettingsWindow from '$lib/components/SettingsWindow';
   import Sidebar from '$lib/components/Sidebar';
   import AdminPanel from '$lib/components/AdminPanel.svelte';
-  import { Popover } from 'bits-ui';
-  import Info from 'phosphor-svelte/lib/Info';
+  import CreditsWindow from '$lib/components/CreditsWindow.svelte';
 </script>
 
 <div class="relative flex min-h-dvh w-full flex-col">
@@ -18,25 +17,7 @@
     <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4">
       <img src={logo} alt="logo" class="h-6 sm:h-7" />
       <MultiplayerStatus />
-      <div class="flex items-center gap-2">
-        <Popover.Root>
-          <Popover.Trigger
-            class="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 active:bg-slate-600"
-            aria-label="Credits"
-          >
-            <Info class="size-4" weight="bold" />
-          </Popover.Trigger>
-          <Popover.Content
-            sideOffset={6}
-            class="z-30 max-w-xs rounded-md bg-white p-3 text-sm font-semibold text-gray-900 drop-shadow-xl"
-          >
-            <p>Original repo: <a class="text-blue-600 underline" href="https://github.com/HytesDev/plinko" target="_blank" rel="noreferrer">HytesDev/plinko</a></p>
-            <p class="mt-1 text-gray-700">Multiplayer tweaks + UI built with ChatGPT Codex.</p>
-            <Popover.Arrow />
-          </Popover.Content>
-        </Popover.Root>
-        <Balance />
-      </div>
+      <Balance />
     </div>
   </nav>
 
@@ -58,6 +39,7 @@
   <LiveStatsWindow />
   <NamePrompt />
   <AdminPanel />
+  <CreditsWindow />
 
 </div>
 
