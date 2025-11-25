@@ -93,7 +93,26 @@ export function factorial(n: number): number {
  * formatCurrency(2400000000); // "$2.4B"
  */
 export function formatCurrency(value: number): string {
+  if (!Number.isFinite(value)) return '$0.00';
+
   const abs = Math.abs(value);
+  const suffixes: { limit: number; suffix: string }[] = [
+    { limit: 1e15, suffix: 'Q' },
+    { limit: 1e12, suffix: 'T' },
+    { limit: 1e9, suffix: 'B' },
+    { limit: 1e6, suffix: 'M' },
+  ];
+
+  const matched = suffixes.find(({ limit }) => abs >= limit);
+  if (matched) {
+    const scaled = value / matched.limit;
+    const formatted = scaled.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    return `${value < 0 ? '-$' : '$'}${formatted}${matched.suffix}`;
+  }
+
   const isCompact = abs >= 1_000_000;
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',

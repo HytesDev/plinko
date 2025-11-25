@@ -32,7 +32,7 @@ Available slots:
   in:scale={{ duration: 200 }}
   use:draggable={{ bounds: 'body', handle: dragHandleElement }}
   class={twMerge(
-    'z-50 w-[15rem] overflow-hidden rounded-md bg-slate-600 drop-shadow-lg',
+    'z-50 flex w-[15rem] max-h-[90vh] flex-col overflow-hidden rounded-md bg-slate-600 drop-shadow-lg',
     className,
   )}
   {...restProps}
@@ -57,7 +57,7 @@ Available slots:
   </div>
 
   <!-- Content -->
-  <div class="p-4">
+  <div class="flex-1 overflow-auto p-4">
     <slot />
   </div>
 </div>

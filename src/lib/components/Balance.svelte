@@ -1,11 +1,12 @@
 <script lang="ts">
   import { defaultStartingBalance } from '$lib/constants/game';
   import {
+    chatFeed,
     isMultiplayerConnected,
     multiplayerConfigured,
     requestBalanceReset,
   } from '$lib/network/multiplayer';
-  import { balance, resetActivePlayer } from '$lib/stores/game';
+  import { balance, clearAllBalls, resetActivePlayer } from '$lib/stores/game';
   import { isAdminPanelOpen, isChatOpen, isCreditsOpen } from '$lib/stores/layout';
   import { formatCurrency } from '$lib/utils/numbers';
   import ShieldCheck from 'phosphor-svelte/lib/ShieldCheck';
@@ -30,6 +31,7 @@
     } else {
       resetActivePlayer(defaultStartingBalance);
     }
+    clearAllBalls();
 
     isResetting = false;
   }
@@ -61,10 +63,19 @@
     <button
       aria-label="Open chat"
       on:click={() => isChatOpen.set(true)}
-      class="flex h-10 items-center gap-1 rounded-md bg-slate-900 px-3 text-xs font-semibold text-white transition hover:bg-slate-700 active:bg-slate-600 sm:text-sm"
+      class="relative flex h-10 items-center gap-1 rounded-md bg-slate-900 px-3 text-xs font-semibold text-white transition hover:bg-slate-700 active:bg-slate-600 sm:text-sm"
       title="Chat (unmoderated)"
     >
       <ChatsCircle class="size-4" weight="bold" />
+      {#if $chatFeed.length > 0}
+        <span class="absolute -right-2 -top-2 flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-md">
+          {#if $chatFeed.length > 99}
+            99+
+          {:else}
+            {$chatFeed.length}
+          {/if}
+        </span>
+      {/if}
     </button>
     <button
       aria-label="Open credits"

@@ -12,6 +12,7 @@
   import CreditsWindow from '$lib/components/CreditsWindow.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
   import BannedOverlay from '$lib/components/BannedOverlay.svelte';
+  import AnnouncementBanner from '$lib/components/AnnouncementBanner.svelte';
 </script>
 
 <div class="relative flex min-h-dvh w-full flex-col">
@@ -44,6 +45,7 @@
   <CreditsWindow />
   <ChatWindow />
   <BannedOverlay />
+  <AnnouncementBanner />
 
 </div>
 

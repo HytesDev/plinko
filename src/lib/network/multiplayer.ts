@@ -1,4 +1,10 @@
-import { activePlayerId, players, recordWinForPlayer, setPlayersState } from '$lib/stores/game';
+import {
+  activePlayerId,
+  clearAllBalls,
+  players,
+  recordWinForPlayer,
+  setPlayersState,
+} from '$lib/stores/game';
 import type { PlayerState, WinRecord } from '$lib/types';
 import { ensureUniquePlayerName, generateRandomPlayerName } from '$lib/utils/playerNames';
 import { get, writable } from 'svelte/store';
@@ -32,6 +38,7 @@ export const chatFeed = writable<
 >([]);
 export const bannedUntil = writable<number | null>(null);
 export const bannedList = writable<{ token: string; name: string; until: number }[]>([]);
+export const announcementMessage = writable<string | null>(null);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
@@ -94,10 +101,6 @@ export function initMultiplayer() {
   playerName.set(initialName);
   getOrCreateToken();
   hydrateBanState();
-  if (get(bannedUntil)) {
-    connectionStatus.set('disabled');
-    return;
-  }
   shouldPromptForName.set(
     Boolean(WS_URL) && !storedName && !window.localStorage.getItem(NAME_PROMPT_SEEN_KEY),
   );
@@ -113,10 +116,6 @@ export function initMultiplayer() {
 
 function connect(name: string) {
   if (!WS_URL || typeof window === 'undefined') return;
-  if (get(bannedUntil)) {
-    connectionStatus.set('disabled');
-    return;
-  }
   getOrCreateToken();
   connectionError.set(null);
   if (reconnectTimer) {
@@ -176,6 +175,10 @@ function handleMessage(message: any) {
         }
       }
       getOrCreateToken();
+      bannedUntil.set(null);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
+      }
       setPlayersState(players ?? [], playerId);
       syncLocalPlayerName(players, playerId);
       activePlayerId.set(playerId);
@@ -196,6 +199,10 @@ function handleMessage(message: any) {
       };
       setPlayersState(players ?? [], get(activePlayerId));
       syncLocalPlayerName(players);
+      bannedUntil.set(null);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
+      }
       if (Array.isArray(serverFeed)) {
         winFeed.set(serverFeed);
       }
@@ -215,6 +222,25 @@ function handleMessage(message: any) {
       connectionStatus.set('disabled');
       if (socket) {
         socket.close();
+      }
+      reconnectTimer = setTimeout(() => {
+        connect(get(playerName));
+      }, 15000);
+      break;
+    }
+    case 'unbanned': {
+      const { token } = message as { token?: string };
+      const matches =
+        token &&
+        typeof token === 'string' &&
+        token.trim() &&
+        token.trim() === (typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_STORAGE_KEY) : '');
+      bannedUntil.set(null);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(BAN_UNTIL_STORAGE_KEY);
+      }
+      if (matches) {
+        connect(get(playerName));
       }
       break;
     }
@@ -249,6 +275,10 @@ function handleMessage(message: any) {
       }
       break;
     }
+    case 'clear_balls': {
+      clearAllBalls();
+      break;
+    }
     case 'reset_result': {
       const { requestId, ok, reason, players } = message as {
         requestId: string;
@@ -259,6 +289,7 @@ function handleMessage(message: any) {
       if (players) {
         setPlayersState(players, get(activePlayerId));
       }
+      clearAllBalls();
       const resolver = requestId ? pendingResets.get(requestId) : undefined;
       if (resolver) {
         resolver({ ok, reason });
@@ -276,6 +307,13 @@ function handleMessage(message: any) {
       }
       if (feedEntry) {
         winFeed.update((feed) => [...feed.slice(-49), feedEntry]);
+      }
+      break;
+    }
+    case 'announcement': {
+      const { text } = message as { text?: string };
+      if (text?.trim()) {
+        announcementMessage.set(text.trim());
       }
       break;
     }
@@ -308,14 +346,16 @@ function handleMessage(message: any) {
       break;
     }
     case 'admin_action_result': {
-      const { requestId, ok, reason, players: playersList, winFeed: feed, bans } = message as {
-        requestId?: string;
-        ok: boolean;
-        reason?: string;
-        players?: PlayerState[];
-        winFeed?: WinFeedEntry[];
-        bans?: { token: string; name: string; until: number }[];
-      };
+      const { requestId, ok, reason, players: playersList, winFeed: feed, bans, text } =
+        message as {
+          requestId?: string;
+          ok: boolean;
+          reason?: string;
+          players?: PlayerState[];
+          winFeed?: WinFeedEntry[];
+          bans?: { token: string; name: string; until: number }[];
+          text?: string;
+        };
       if (Array.isArray(playersList)) {
         setPlayersState(playersList, get(activePlayerId));
       }
@@ -325,8 +365,11 @@ function handleMessage(message: any) {
       if (Array.isArray(bans)) {
         bannedList.set(bans);
       }
+      if (text?.trim()) {
+        announcementMessage.set(text.trim());
+      }
       if (requestId && pendingAdminRequests.has(requestId)) {
-        pendingAdminRequests.get(requestId)?.({ ok, reason });
+        pendingAdminRequests.get(requestId)?.({ ok, reason, bans, text });
         pendingAdminRequests.delete(requestId);
       }
       if (!ok && reason) {
@@ -608,4 +651,12 @@ export async function adminListBans() {
   const authed = await requireAdminAuth();
   if (!authed) return { ok: false, reason: 'Not authorized' };
   return adminAction('list_bans', {});
+}
+
+export async function adminSendAnnouncement(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: false, reason: 'Message required' };
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('announce', { text: trimmed.slice(0, 256) });
 }

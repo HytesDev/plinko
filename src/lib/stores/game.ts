@@ -231,6 +231,12 @@ export function applyBalanceDelta(playerId: string, delta: number) {
   }));
 }
 
+export function clearAllBalls() {
+  const engine = get(plinkoEngine);
+  engine?.clearBalls();
+  betAmountOfExistingBalls.set({});
+}
+
 export function resetActivePlayer(startingBalance: number = defaultStartingBalance) {
   updateActivePlayer((player) => ({
     ...player,

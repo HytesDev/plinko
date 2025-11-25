@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,8 +21,13 @@ const bannedMeta = new Map(); // token -> { name, until }
 const winFeed = [];
 const chatFeed = [];
 
+const DATA_DIR = path.join(process.cwd(), 'data');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+
 const httpServer = createServer();
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+loadState();
 
 httpServer.listen(PORT, () => {
   console.log(`Multiplayer server listening on ws://localhost:${PORT}/ws`);
@@ -45,6 +52,7 @@ function persistPlayerById(playerId) {
   const player = players.get(playerId);
   if (token && player) {
     storedPlayersByToken.set(token, structuredClone(player));
+    saveState();
   }
 }
 
@@ -77,6 +85,7 @@ function addWinToFeed(player, record) {
   if (winFeed.length > MAX_WIN_FEED) {
     winFeed.splice(0, winFeed.length - MAX_WIN_FEED);
   }
+  saveState();
 }
 
 function ensureUniqueName(baseName, currentPlayerId = null) {
@@ -202,6 +211,7 @@ function handleJoin(name, socket, providedToken) {
 
   if (token) {
     storedPlayersByToken.set(token, structuredClone(player));
+    saveState();
   }
 
   players.set(player.id, player);
@@ -263,6 +273,9 @@ function handleReset(playerId, socket, requestId) {
     }),
   );
   syncPlayers();
+  broadcast({
+    type: 'clear_balls',
+  });
 }
 
 function handleChat(playerId, text) {
@@ -362,6 +375,7 @@ function handleAdminAction(msg, socket) {
         bannedTokens.set(token, banUntil);
         bannedMeta.set(token, { name: player.name, until: banUntil });
         storedPlayersByToken.delete(token);
+        saveState();
       }
       players.delete(targetPlayerId);
       tokensByPlayerId.delete(targetPlayerId);
@@ -408,6 +422,11 @@ function handleAdminAction(msg, socket) {
         action,
         token,
       });
+      broadcast({
+        type: 'unbanned',
+        token,
+      });
+      saveState();
       break;
     }
     case 'rename_player': {
@@ -465,6 +484,9 @@ function handleAdminAction(msg, socket) {
         balance: player.balance,
       });
       syncPlayers();
+      broadcast({
+        type: 'clear_balls',
+      });
       break;
     }
     case 'remove_player': {
@@ -473,6 +495,9 @@ function handleAdminAction(msg, socket) {
       if (playerToken) {
         storedPlayersByToken.delete(playerToken);
         tokensByPlayerId.delete(targetPlayerId);
+        bannedTokens.delete(playerToken);
+        bannedMeta.delete(playerToken);
+        saveState();
       }
       const targetSocket = socketsByPlayer.get(targetPlayerId);
       socketsByPlayer.delete(targetPlayerId);
@@ -508,6 +533,30 @@ function handleAdminAction(msg, socket) {
         ok: true,
         action,
         bans: getBansWithMeta(),
+      });
+      break;
+    }
+    case 'announce': {
+      const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 256) : '';
+      if (!text) {
+        sendAdminResult(socket, {
+          type: 'admin_action_result',
+          requestId,
+          ok: false,
+          reason: 'Message required',
+        });
+        return;
+      }
+      broadcast({
+        type: 'announcement',
+        text,
+      });
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        text,
       });
       break;
     }
@@ -600,6 +649,11 @@ wss.on('connection', (socket) => {
   socket.on('close', () => {
     if (playerId) {
       players.delete(playerId);
+      const token = tokensByPlayerId.get(playerId);
+      if (token) {
+        persistPlayerById(playerId);
+        tokensByPlayerId.delete(playerId);
+      }
       adminPlayerIds.delete(playerId);
       socketsByPlayer.delete(playerId);
       syncPlayers();
@@ -615,9 +669,65 @@ function getPlayersWithAdminFlag() {
 }
 
 function getBansWithMeta() {
-  return Array.from(bannedTokens.entries()).map(([token, until]) => ({
-    token,
-    until,
-    name: bannedMeta.get(token)?.name || 'Unknown',
-  }));
+  const now = Date.now();
+  return Array.from(bannedTokens.entries())
+    .filter(([, until]) => until > now)
+    .map(([token, until]) => ({
+      token,
+      until,
+      name: bannedMeta.get(token)?.name || 'Unknown',
+    }));
+}
+
+function loadState() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(STATE_FILE)) return;
+    const raw = fs.readFileSync(STATE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.players)) {
+      parsed.players.forEach(({ token, player }) => {
+        if (token && player) {
+          storedPlayersByToken.set(token, {
+            ...player,
+            balance: toCents(player.balance),
+          });
+        }
+      });
+    }
+    if (Array.isArray(parsed.bans)) {
+      parsed.bans.forEach(({ token, until, name }) => {
+        if (token && Number.isFinite(until) && until > Date.now()) {
+          bannedTokens.set(token, until);
+          bannedMeta.set(token, { name: name || 'Unknown', until });
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load state file', error);
+  }
+}
+
+function saveState() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const data = {
+      players: Array.from(storedPlayersByToken.entries()).map(([token, player]) => ({
+        token,
+        player,
+      })),
+      bans: Array.from(bannedTokens.entries()).map(([token, until]) => ({
+        token,
+        until,
+        name: bannedMeta.get(token)?.name || 'Unknown',
+      })),
+    };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Failed to save state file', error);
+  }
 }

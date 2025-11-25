@@ -378,6 +378,13 @@ class PlinkoEngine {
     });
     betAmountOfExistingBalls.set({});
   }
+
+  /**
+   * Clears all active balls from the board.
+   */
+  clearBalls() {
+    this.removeAllBalls();
+  }
 }
 
 export default PlinkoEngine;

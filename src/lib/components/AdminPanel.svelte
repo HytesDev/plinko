@@ -6,6 +6,7 @@
     adminError,
     adminClearChat,
     adminUnbanToken,
+    adminSendAnnouncement,
     adminListBans,
     adminRemovePlayer,
     adminRenamePlayer,
@@ -28,6 +29,7 @@
   let unbanToken = '';
   let isSaving = false;
   let bansLoaded = false;
+  let announcementText = '';
 
   $: {
     const activeIds = new Set($players.map((player) => player.id));
@@ -167,6 +169,23 @@
     isSaving = false;
   }
 
+  async function handleAnnouncement() {
+    isSaving = true;
+    actionMessage = '';
+    adminError.set(null);
+    if (!announcementText.trim()) {
+      adminError.set('Enter a message to announce.');
+      isSaving = false;
+      return;
+    }
+    const result = await adminSendAnnouncement(announcementText);
+    if (result.ok) {
+      actionMessage = 'Announcement sent';
+      announcementText = '';
+    }
+    isSaving = false;
+  }
+
   $: if ($adminAuthState === 'authorized' && $isAdminPanelOpen && !bansLoaded) {
     adminListBans();
     bansLoaded = true;
@@ -190,7 +209,7 @@
     </svelte:fragment>
 
     {#if $adminAuthState === 'authorized'}
-      <div class="space-y-3 text-sm text-white">
+      <div class="max-h-[78vh] space-y-3 overflow-y-auto pr-1 text-sm text-white">
         <div class="rounded-md border border-slate-600 bg-slate-800 p-3">
           <p class="text-xs uppercase tracking-wide text-slate-400">Players ({$players.length})</p>
         </div>
@@ -355,6 +374,28 @@
                 {/each}
               </div>
             {/if}
+          </div>
+
+          <div class="mt-4 rounded-md border border-emerald-600/60 bg-emerald-900/40 p-3">
+            <p class="text-xs uppercase tracking-wide text-emerald-200">Announcement</p>
+            <p class="text-[11px] text-emerald-100/90">
+              Sends a banner to everyone currently connected.
+            </p>
+            <div class="mt-2 flex flex-col gap-2">
+              <textarea
+                class="h-16 w-full resize-none rounded-sm bg-slate-950/70 px-2 py-2 text-sm text-white outline-none ring-1 ring-emerald-500/50 focus:ring-emerald-300"
+                bind:value={announcementText}
+                maxlength="256"
+                placeholder="Message to broadcast"
+              />
+              <button
+                class="self-end rounded-sm bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                on:click={handleAnnouncement}
+                disabled={isSaving}
+              >
+                Send announcement
+              </button>
+            </div>
           </div>
         </div>
       </div>
