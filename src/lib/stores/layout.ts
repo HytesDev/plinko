@@ -5,3 +5,5 @@ export const isGameSettingsOpen = writable<boolean>(false);
 export const isLiveStatsOpen = writable<boolean>(false);
 
 export const isAdminPanelOpen = writable<boolean>(false);
+
+export const isCreditsOpen = writable<boolean>(false);
