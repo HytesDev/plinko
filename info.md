@@ -53,3 +53,9 @@ Then open https://plinko.hytes.dev in a browser and verify multiplayer connects.
 ```bash
 sudo systemctl enable plinko-ws
 ```
+
+## Current Deployment Notes
+- App root: `/opt/plinko-server` (git clone). Build output served from `/opt/plinko-server/build` via nginx.
+- WebSocket server: `plinko-ws` systemd unit runs `/opt/plinko-server/server/index.js` with Node v20.19.5. Set `ADMIN_PASSWORD` in the unit to override default.
+- Frontend multiplayer URL: set `VITE_MULTIPLAYER_WS_URL` (e.g., `wss://plinko.hytes.dev/ws`) before `pnpm run build` on the VPS.
+- New features: admin panel, credits popout, live chat (unmoderated; admins can clear chat), adjustable auto-drop interval.

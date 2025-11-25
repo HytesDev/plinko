@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { winRecords } from '$lib/stores/game';
+  import { totalProfitHistory, winRecords } from '$lib/stores/game';
   import { formatCurrency } from '$lib/utils/numbers';
   import { twMerge } from 'tailwind-merge';
 
-  $: profit = $winRecords.reduce((acc, { profit }) => acc + profit, 0);
+  $: profit = $totalProfitHistory.at(-1) ?? 0;
   $: wins = $winRecords.filter(({ profit }) => profit >= 0).length;
   $: losses = $winRecords.filter(({ profit }) => profit < 0).length;
 

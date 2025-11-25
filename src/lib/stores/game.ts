@@ -9,6 +9,7 @@ import {
 } from '$lib/types';
 import { interpolateRgbColors } from '$lib/utils/colors';
 import { countValueOccurrences } from '$lib/utils/numbers';
+import { ensureUniquePlayerName, generateRandomPlayerName } from '$lib/utils/playerNames';
 import { derived, get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,7 +31,7 @@ export const rowCount = writable<RowCount>(16);
 
 export const riskLevel = writable<RiskLevel>(RiskLevel.MEDIUM);
 
-const defaultPlayer = createPlayer('Player 1');
+const defaultPlayer = createPlayer(generateRandomPlayerName());
 
 export const players = writable<PlayerState[]>([defaultPlayer]);
 
@@ -128,10 +129,14 @@ export const binProbabilities = derived<
   return probabilities;
 });
 
-export function createPlayer(name: string, startingBalance = defaultStartingBalance): PlayerState {
+export function createPlayer(
+  name: string,
+  startingBalance = defaultStartingBalance,
+  existingNames: string[] = [],
+): PlayerState {
   return {
     id: uuidv4(),
-    name,
+    name: ensureUniquePlayerName(name, existingNames),
     balance: startingBalance,
     winRecords: [],
     totalProfitHistory: [0],
@@ -154,9 +159,23 @@ function normalizePlayerState(player: PlayerState): PlayerState {
   };
 }
 
+function enforceUniquePlayerNames(playersList: PlayerState[]): PlayerState[] {
+  const seenNames: string[] = [];
+  return playersList.map((player) => {
+    const uniqueName = ensureUniquePlayerName(player.name, seenNames);
+    seenNames.push(uniqueName);
+    return {
+      ...player,
+      name: uniqueName,
+    };
+  });
+}
+
 export function addPlayer(name?: string) {
-  const safeName = name?.trim() || `Player ${get(players).length + 1}`;
-  const newPlayer = createPlayer(safeName);
+  const existingNames = get(players).map((player) => player.name);
+  const desiredName = name?.trim() || generateRandomPlayerName(existingNames);
+  const uniqueName = ensureUniquePlayerName(desiredName, existingNames);
+  const newPlayer = createPlayer(uniqueName, defaultStartingBalance, existingNames);
   players.update((list) => [...list, newPlayer]);
   activePlayerId.set(newPlayer.id);
   return newPlayer;
@@ -173,9 +192,13 @@ export function renamePlayer(playerId: string, name: string) {
   if (!name.trim()) {
     return;
   }
+  const existingNames = get(players)
+    .filter((player) => player.id !== playerId)
+    .map((player) => player.name);
+  const uniqueName = ensureUniquePlayerName(name, existingNames);
   updatePlayerById(playerId, (player) => ({
     ...player,
-    name: name.trim(),
+    name: uniqueName,
   }));
 }
 
@@ -232,11 +255,12 @@ export function setPlayersState(
   nextPlayers: PlayerState[],
   nextActiveId: string | null | undefined = undefined,
 ) {
-  const safePlayers = (nextPlayers.length ? nextPlayers : [createPlayer('Player 1')]).map(
-    normalizePlayerState,
-  );
-  players.set(safePlayers);
+  const normalizedPlayers = (
+    nextPlayers.length ? nextPlayers : [createPlayer(generateRandomPlayerName())]
+  ).map(normalizePlayerState);
+  const uniquePlayers = enforceUniquePlayerNames(normalizedPlayers);
+  players.set(uniquePlayers);
   const activeId =
-    safePlayers.find((player) => player.id === nextActiveId)?.id ?? safePlayers[0].id;
+    uniquePlayers.find((player) => player.id === nextActiveId)?.id ?? uniquePlayers[0].id;
   activePlayerId.set(activeId);
 }

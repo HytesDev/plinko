@@ -1,5 +1,6 @@
-import { activePlayerId, recordWinForPlayer, setPlayersState } from '$lib/stores/game';
+import { activePlayerId, players, recordWinForPlayer, setPlayersState } from '$lib/stores/game';
 import type { PlayerState, WinRecord } from '$lib/types';
+import { ensureUniquePlayerName, generateRandomPlayerName } from '$lib/utils/playerNames';
 import { get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -41,9 +42,15 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestedName: string | null = null;
 let lastChatSentAt = 0;
 
+function getExistingNames(excludeSelf = false) {
+  const excludeId = excludeSelf ? get(activePlayerId) : null;
+  return get(players)
+    .filter((player) => (excludeId ? player.id !== excludeId : true))
+    .map((player) => player.name);
+}
+
 function getDefaultName() {
-  const suffix = Math.floor(Math.random() * 900 + 100);
-  return `Player-${suffix}`;
+  return generateRandomPlayerName(getExistingNames(true));
 }
 
 export function initMultiplayer() {
@@ -51,15 +58,21 @@ export function initMultiplayer() {
     return;
   }
 
+  const storedName = window.localStorage.getItem(NAME_STORAGE_KEY)?.slice(0, 24);
+  const initialName = ensureUniquePlayerName(
+    storedName || getDefaultName(),
+    getExistingNames(true),
+  );
+  playerName.set(initialName);
+  shouldPromptForName.set(
+    Boolean(WS_URL) && !storedName && !window.localStorage.getItem(NAME_PROMPT_SEEN_KEY),
+  );
+
   if (!WS_URL) {
     connectionStatus.set('disabled');
     return;
   }
 
-  const storedName = window.localStorage.getItem(NAME_STORAGE_KEY);
-  const initialName = storedName || getDefaultName();
-  playerName.set(initialName);
-  shouldPromptForName.set(!storedName && !window.localStorage.getItem(NAME_PROMPT_SEEN_KEY));
   connectionStatus.set('connecting');
   connect(initialName);
 }
@@ -312,17 +325,19 @@ export function renamePlayerOnServer(name: string) {
   const trimmed = name.trim().slice(0, 24);
   if (!trimmed) return;
 
-  playerName.set(trimmed);
-  window.localStorage.setItem(NAME_STORAGE_KEY, trimmed);
+  const uniqueName = ensureUniquePlayerName(trimmed, getExistingNames(true));
+
+  playerName.set(uniqueName);
+  window.localStorage.setItem(NAME_STORAGE_KEY, uniqueName);
   window.localStorage.setItem(NAME_PROMPT_SEEN_KEY, 'true');
   shouldPromptForName.set(false);
-  pendingRename.set(trimmed);
+  pendingRename.set(uniqueName);
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(
       JSON.stringify({
         type: 'rename',
-        name: trimmed,
+        name: uniqueName,
       }),
     );
   }
