@@ -5,6 +5,7 @@
     adminAuthState,
     adminError,
     adminClearChat,
+    adminUnbanToken,
     adminRemovePlayer,
     adminRenamePlayer,
     adminResetPlayer,
@@ -22,6 +23,7 @@
   let renameInputs: Record<string, string> = {};
   let balanceInputs: Record<string, string> = {};
   let banInputs: Record<string, string> = {};
+  let unbanToken = '';
   let isSaving = false;
 
   $: {
@@ -138,10 +140,27 @@
     }
     isSaving = false;
   }
+
+  async function handleUnban() {
+    isSaving = true;
+    actionMessage = '';
+    adminError.set(null);
+    if (!unbanToken.trim()) {
+      adminError.set('Enter a token to unban.');
+      isSaving = false;
+      return;
+    }
+    const result = await adminUnbanToken(unbanToken.trim());
+    if (result.ok) {
+      actionMessage = 'Token unbanned';
+      unbanToken = '';
+    }
+    isSaving = false;
+  }
 </script>
 
 {#if $isAdminPanelOpen}
-  <DraggableWindow class="fixed bottom-6 right-6 w-[22rem]" onClose={closePanel}>
+  <DraggableWindow class="fixed bottom-6 right-6 w-[28rem] max-w-[95vw]" onClose={closePanel}>
     <svelte:fragment slot="title">
       <div class="flex items-center gap-2 text-sm font-semibold text-white">
         <span class="rounded-sm bg-cyan-400 px-2 py-0.5 text-slate-900">Admin</span>
@@ -267,6 +286,24 @@
             </button>
           </div>
           <p class="mt-1 text-[11px] text-slate-400">Remove chat messages for everyone.</p>
+
+          <div class="mt-3 grid grid-cols-[1fr,auto] items-end gap-2">
+            <label class="text-xs text-slate-300">
+              Unban token
+              <input
+                class="mt-1 w-full rounded-sm bg-slate-900 px-2 py-1 text-sm text-white outline-none ring-1 ring-slate-700 focus:ring-emerald-400"
+                placeholder="Token string"
+                bind:value={unbanToken}
+              />
+            </label>
+            <button
+              class="rounded-sm bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              on:click={handleUnban}
+              disabled={isSaving}
+            >
+              Unban
+            </button>
+          </div>
         </div>
       </div>
     {:else}

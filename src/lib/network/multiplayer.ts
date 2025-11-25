@@ -592,3 +592,9 @@ export async function adminBanPlayer(playerId: string, minutes: number) {
   if (!authed) return { ok: false, reason: 'Not authorized' };
   return adminAction('ban_player', { playerId, minutes });
 }
+
+export async function adminUnbanToken(token: string) {
+  const authed = await requireAdminAuth();
+  if (!authed) return { ok: false, reason: 'Not authorized' };
+  return adminAction('unban_token', { token });
+}

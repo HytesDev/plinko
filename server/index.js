@@ -385,6 +385,27 @@ function handleAdminAction(msg, socket) {
       syncPlayers();
       break;
     }
+    case 'unban_token': {
+      const token = typeof msg.token === 'string' ? msg.token : '';
+      if (!token) {
+        sendAdminResult(socket, {
+          type: 'admin_action_result',
+          requestId,
+          ok: false,
+          reason: 'Token required',
+        });
+        return;
+      }
+      bannedTokens.delete(token);
+      sendAdminResult(socket, {
+        type: 'admin_action_result',
+        requestId,
+        ok: true,
+        action,
+        token,
+      });
+      break;
+    }
     case 'rename_player': {
       const nextName = ensureUniqueName((msg.name || '').slice(0, 24), targetPlayerId);
       player.name = nextName;
