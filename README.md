@@ -1,9 +1,9 @@
 # Plinko Game Online 🎮
 
-Forked from the original project at [plinko-game-online/plinko-game-online.github.io](https://github.com/plinko-game-online/plinko-game-online.github.io), this variant powers [plinko.hytes.dev](https://plinko.hytes.dev) with multiplayer, admin controls, and a few UI refinements.
+Forked from the original project at [plinko-game-online/plinko-game-online.github.io](https://github.com/plinko-game-online/plinko-game-online.github.io), this variant powers https://hytesdev.github.io/plinko/ with multiplayer, admin controls, and a few UI refinements.
 
 ## Live Site
-- Play at [plinko.hytes.dev](https://plinko.hytes.dev).
+- Play at [this URL](https://hytesdev.github.io/plinko/).
 - Builds are deployed infrequently; expect low update cadence unless critical fixes are needed.
 
 ## What's Different in This Fork
