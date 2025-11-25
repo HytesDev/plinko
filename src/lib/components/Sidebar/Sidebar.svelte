@@ -46,6 +46,7 @@
   let autoBetInFlight = false;
   let isBetting = false;
   let lastBetError = '';
+  let autoIntervalMs = autoBetIntervalMs;
 
   $: isBetAmountNegative = $betAmount < 0;
   $: isBetExceedBalance = $betAmount > $balance;
@@ -135,6 +136,15 @@
     }
   };
 
+  const handleAutoIntervalFocusOut: FormEventHandler<HTMLInputElement> = (e) => {
+    const parsedValue = parseInt(e.currentTarget.value.trim());
+    if (isNaN(parsedValue)) {
+      autoIntervalMs = autoBetIntervalMs;
+    } else {
+      autoIntervalMs = Math.max(50, Math.min(10000, parsedValue));
+    }
+  };
+
   async function handleBetClick() {
     if (isBetting) return;
 
@@ -144,7 +154,7 @@
       isBetting = false;
     } else if (autoBetInterval === null) {
       autoBetsLeft = autoBetInput === 0 ? null : autoBetInput;
-      autoBetInterval = setInterval(autoBetDropBall, autoBetIntervalMs);
+      autoBetInterval = setInterval(autoBetDropBall, Math.max(50, autoIntervalMs));
     } else if (autoBetInterval !== null) {
       resetAutoBetInterval();
     }
@@ -285,6 +295,23 @@
       {#if isAutoBetInputNegative}
         <p class="text-xs leading-5 text-red-400">This must be greater than or equal to 0.</p>
       {/if}
+
+      <div class="mt-3 text-xs text-slate-300">
+        <label class="flex items-center gap-2">
+          Interval (ms)
+          <input
+            type="number"
+            min="50"
+            max="10000"
+            value={autoIntervalMs}
+            on:focusout={handleAutoIntervalFocusOut}
+            on:input={(e) => (autoIntervalMs = parseInt(e.currentTarget.value))}
+            class="w-24 rounded-sm bg-slate-900 px-2 py-1 text-xs text-white outline-none ring-1 ring-slate-700 focus:ring-cyan-400"
+            title="Delay between auto drops"
+          />
+        </label>
+        <p class="mt-1 text-slate-500">Applies when Auto is running.</p>
+      </div>
     </div>
   {/if}
 

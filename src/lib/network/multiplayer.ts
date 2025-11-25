@@ -22,6 +22,7 @@ export const winFeed = writable<WinFeedEntry[]>([]);
 export const shouldPromptForName = writable<boolean>(false);
 export const adminAuthState = writable<'locked' | 'pending' | 'authorized'>('locked');
 export const adminError = writable<string | null>(null);
+const pendingRename = writable<string | null>(null);
 
 export const multiplayerConfigured = Boolean(WS_URL);
 
@@ -33,6 +34,8 @@ const pendingAdminRequests = new Map<
   (result: { ok: boolean; reason?: string; [key: string]: unknown }) => void
 >();
 let adminPassword: string | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let lastRequestedName: string | null = null;
 
 function getDefaultName() {
   const suffix = Math.floor(Math.random() * 900 + 100);
@@ -60,12 +63,17 @@ export function initMultiplayer() {
 function connect(name: string) {
   if (!WS_URL || typeof window === 'undefined') return;
   connectionError.set(null);
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   socket = new WebSocket(WS_URL);
 
   socket.addEventListener('open', () => {
     connectionStatus.set('connected');
     socket?.send(JSON.stringify({ type: 'join', name }));
     window.localStorage.setItem(NAME_STORAGE_KEY, name);
+    lastRequestedName = name;
   });
 
   socket.addEventListener('error', () => {
@@ -75,7 +83,8 @@ function connect(name: string) {
 
   socket.addEventListener('close', () => {
     connectionStatus.set('error');
-    connectionError.set('Disconnected from multiplayer server');
+    connectionError.set('Disconnected from multiplayer server, retrying…');
+    reconnectTimer = setTimeout(() => connect(lastRequestedName || name), 1500);
   });
 
   socket.addEventListener('message', (event) => {
@@ -102,6 +111,7 @@ function handleMessage(message: any) {
       if (Array.isArray(serverFeed)) {
         winFeed.set(serverFeed);
       }
+      triggerPendingRename();
       break;
     }
     case 'players': {
@@ -114,6 +124,7 @@ function handleMessage(message: any) {
       if (Array.isArray(serverFeed)) {
         winFeed.set(serverFeed);
       }
+      triggerPendingRename();
       break;
     }
     case 'bet_result': {
@@ -172,6 +183,8 @@ function handleMessage(message: any) {
           window.localStorage.setItem(NAME_PROMPT_SEEN_KEY, 'true');
         }
         shouldPromptForName.set(false);
+        pendingRename.set(null);
+        lastRequestedName = name.trim();
       }
       break;
     }
@@ -277,6 +290,7 @@ export function renamePlayerOnServer(name: string) {
   window.localStorage.setItem(NAME_STORAGE_KEY, trimmed);
   window.localStorage.setItem(NAME_PROMPT_SEEN_KEY, 'true');
   shouldPromptForName.set(false);
+  pendingRename.set(trimmed);
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(
@@ -324,6 +338,17 @@ function syncLocalPlayerName(playersList?: PlayerState[], activeId?: string | nu
     }
     shouldPromptForName.set(false);
   }
+}
+
+function triggerPendingRename() {
+  const desired = get(pendingRename);
+  if (!desired || !socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(
+    JSON.stringify({
+      type: 'rename',
+      name: desired,
+    }),
+  );
 }
 
 function sendAdminRequest(body: Record<string, unknown>) {
