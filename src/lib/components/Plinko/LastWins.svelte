@@ -1,13 +1,13 @@
 <script lang="ts">
   import { binColorsByRowCount } from '$lib/constants/game';
-  import { winRecords } from '$lib/stores/game';
+  import { plinkoWinRecords } from '$lib/stores/game';
 
   /**
    * Number of last wins to display.
    */
   export let winCount = 4;
 
-  $: lastWins = $winRecords.slice(-winCount).toReversed();
+  $: lastWins = $plinkoWinRecords.slice(-winCount).toReversed();
 </script>
 
 <!-- Clamps in mobile:

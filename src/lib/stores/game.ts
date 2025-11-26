@@ -1,11 +1,16 @@
 import PlinkoEngine from '$lib/components/Plinko/PlinkoEngine';
-import { binColor, defaultStartingBalance } from '$lib/constants/game';
+import { binColor, defaultStartingBalance, rowCountOptions } from '$lib/constants/game';
 import {
+  GameMode,
   RiskLevel,
   type BetAmountOfExistingBalls,
+  type CoinflipWinRecord,
   type PlayerState,
+  type PlinkoWinRecord,
   type RowCount,
   type WinRecord,
+  isCoinflipWinRecord,
+  isPlinkoWinRecord,
 } from '$lib/types';
 import { interpolateRgbColors } from '$lib/utils/colors';
 import { countValueOccurrences, roundToCents } from '$lib/utils/numbers';
@@ -30,6 +35,8 @@ export const betAmountOfExistingBalls = writable<BetAmountOfExistingBalls>({});
 export const rowCount = writable<RowCount>(16);
 
 export const riskLevel = writable<RiskLevel>(RiskLevel.MEDIUM);
+
+export const gameMode = writable<GameMode>(GameMode.PLINKO);
 
 const defaultPlayer = createPlayer(generateRandomPlayerName());
 
@@ -75,6 +82,16 @@ function createActivePlayerStore<K extends keyof PlayerState>(key: K) {
 
 export const winRecords = createActivePlayerStore('winRecords');
 
+export const plinkoWinRecords = derived<typeof winRecords, PlinkoWinRecord[]>(
+  winRecords,
+  ($winRecords) => $winRecords.filter(isPlinkoWinRecord) as PlinkoWinRecord[],
+);
+
+export const coinflipWinRecords = derived<typeof winRecords, CoinflipWinRecord[]>(
+  winRecords,
+  ($winRecords) => $winRecords.filter(isCoinflipWinRecord) as CoinflipWinRecord[],
+);
+
 /**
  * History of total profits of the active player. Should be updated whenever a new win record
  * is pushed to `winRecords` store.
@@ -118,9 +135,9 @@ export const binColors = derived<typeof rowCount, { background: string[]; shadow
 );
 
 export const binProbabilities = derived<
-  [typeof winRecords, typeof rowCount],
+  [typeof plinkoWinRecords, typeof rowCount],
   { [binIndex: number]: number }
->([winRecords, rowCount], ([$winRecords, $rowCount]) => {
+>([plinkoWinRecords, rowCount], ([$winRecords, $rowCount]) => {
   const occurrences = countValueOccurrences($winRecords.map(({ binIndex }) => binIndex));
   const probabilities: Record<number, number> = {};
   for (let i = 0; i < $rowCount + 1; ++i) {
@@ -143,6 +160,61 @@ export function createPlayer(
   };
 }
 
+function isValidRowCount(value: number): value is RowCount {
+  return rowCountOptions.includes(value as RowCount);
+}
+
+function normalizeWinRecord(record: WinRecord): WinRecord {
+  const payoutMultiplier =
+    typeof record?.payout?.multiplier === 'number' ? record.payout.multiplier : 0;
+  const payoutValue = typeof record?.payout?.value === 'number' ? record.payout.value : 0;
+  const bet = typeof record?.betAmount === 'number' ? record.betAmount : 0;
+  const profit =
+    typeof record?.profit === 'number' ? record.profit : Math.round((payoutValue - bet) * 100) / 100;
+  const timestamp =
+    typeof record?.timestamp === 'number' && Number.isFinite(record.timestamp)
+      ? record.timestamp
+      : Date.now();
+
+  const base = {
+    id: record?.id || uuidv4(),
+    betAmount: roundToCents(bet),
+    payout: {
+      multiplier: payoutMultiplier,
+      value: roundToCents(payoutValue),
+    },
+    profit: roundToCents(profit),
+    timestamp,
+  };
+
+  const gameMode = record?.gameMode ?? GameMode.PLINKO;
+  if (gameMode === GameMode.COINFLIP && 'outcome' in record && 'side' in record) {
+    const outcome = record.outcome === 'WIN' ? 'WIN' : 'LOSE';
+    const side = record.side === 'TAILS' ? 'TAILS' : 'HEADS';
+    return {
+      ...base,
+      gameMode,
+      outcome,
+      side,
+    } satisfies CoinflipWinRecord;
+  }
+
+  const normalizedRowCount = isValidRowCount((record as PlinkoWinRecord)?.rowCount)
+    ? (record as PlinkoWinRecord).rowCount
+    : rowCountOptions[rowCountOptions.length - 1];
+  const binIndex =
+    typeof (record as PlinkoWinRecord)?.binIndex === 'number'
+      ? (record as PlinkoWinRecord).binIndex
+      : 0;
+
+  return {
+    ...base,
+    gameMode: GameMode.PLINKO,
+    rowCount: normalizedRowCount,
+    binIndex,
+  } satisfies PlinkoWinRecord;
+}
+
 function normalizePlayerState(player: PlayerState): PlayerState {
   return {
     id: player.id || uuidv4(),
@@ -151,7 +223,9 @@ function normalizePlayerState(player: PlayerState): PlayerState {
       typeof player.balance === 'number' && !Number.isNaN(player.balance)
         ? roundToCents(player.balance)
         : roundToCents(defaultStartingBalance),
-    winRecords: Array.isArray(player.winRecords) ? player.winRecords : [],
+    winRecords: Array.isArray(player.winRecords)
+      ? player.winRecords.map(normalizeWinRecord)
+      : [],
     totalProfitHistory:
       Array.isArray(player.totalProfitHistory) && player.totalProfitHistory.length
         ? player.totalProfitHistory.map((value) => roundToCents(value))
@@ -247,13 +321,14 @@ export function resetActivePlayer(startingBalance: number = defaultStartingBalan
 }
 
 export function recordWinForPlayer(playerId: string, record: WinRecord) {
+  const normalizedRecord = normalizeWinRecord(record);
   updatePlayerById(playerId, (player) => {
     const lastTotalProfit = player.totalProfitHistory.at(-1) ?? 0;
-    const nextTotalProfit = roundToCents(lastTotalProfit + record.profit);
-    const nextBalance = roundToCents(player.balance + record.payout.value);
+    const nextTotalProfit = roundToCents(lastTotalProfit + normalizedRecord.profit);
+    const nextBalance = roundToCents(player.balance + normalizedRecord.payout.value);
     return {
       ...player,
-      winRecords: [...player.winRecords, record],
+      winRecords: [...player.winRecords, normalizedRecord],
       totalProfitHistory: [...player.totalProfitHistory, nextTotalProfit],
       balance: nextBalance,
     };

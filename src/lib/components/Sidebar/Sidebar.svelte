@@ -2,9 +2,12 @@
   import { Select } from '$lib/components/ui';
   import { autoBetIntervalMs, rowCountOptions } from '$lib/constants/game';
   import {
+    activePlayerId,
     balance,
     betAmount,
     betAmountOfExistingBalls,
+    clearAllBalls,
+    gameMode,
     plinkoEngine,
     riskLevel,
     rowCount,
@@ -14,10 +17,11 @@
     connectionStatus,
     isMultiplayerConnected,
     multiplayerConfigured,
+    reportWin,
     requestBet,
   } from '$lib/network/multiplayer';
   import { isGameSettingsOpen, isLiveStatsOpen } from '$lib/stores/layout';
-  import { BetMode, RiskLevel } from '$lib/types';
+  import { BetMode, GameMode, RiskLevel } from '$lib/types';
   import { flyAndScale } from '$lib/utils/transitions';
   import { Popover, Tooltip } from 'bits-ui';
   import ChartLine from 'phosphor-svelte/lib/ChartLine';
@@ -25,7 +29,9 @@
   import Infinity from 'phosphor-svelte/lib/Infinity';
   import Question from 'phosphor-svelte/lib/Question';
   import type { FormEventHandler } from 'svelte/elements';
+  import { get } from 'svelte/store';
   import { twMerge } from 'tailwind-merge';
+  import { v4 as uuidv4 } from 'uuid';
 
   let betMode: BetMode = BetMode.MANUAL;
 
@@ -47,20 +53,35 @@
   let isBetting = false;
   let lastBetError = '';
   let autoIntervalMs = autoBetIntervalMs;
+  let lastSelectedMode = get(gameMode);
 
   $: isBetAmountNegative = $betAmount < 0;
   $: isBetExceedBalance = $betAmount > $balance;
   $: isAutoBetInputNegative = autoBetInput < 0;
 
-  $: isDropBallDisabled =
-    $plinkoEngine === null ||
+  $: requiresConnection =
+    $connectionStatus === 'connecting' ||
+    (multiplayerConfigured && $connectionStatus !== 'connected');
+
+  $: isBetActionDisabled =
     isBetAmountNegative ||
     isBetExceedBalance ||
     isAutoBetInputNegative ||
     isBetting ||
-    ($connectionStatus === 'connecting' || (multiplayerConfigured && $connectionStatus !== 'connected'));
+    requiresConnection ||
+    ($gameMode === GameMode.PLINKO && $plinkoEngine === null);
 
-  $: hasOutstandingBalls = Object.keys($betAmountOfExistingBalls).length > 0;
+  $: hasOutstandingBalls =
+    $gameMode === GameMode.PLINKO && Object.keys($betAmountOfExistingBalls).length > 0;
+
+  $: if ($gameMode === GameMode.COINFLIP && lastSelectedMode === GameMode.PLINKO) {
+    clearAllBalls();
+  }
+
+  $: if (autoBetInterval !== null && $gameMode !== lastSelectedMode) {
+    resetAutoBetInterval();
+  }
+  $: lastSelectedMode = $gameMode;
 
   const handleBetAmountFocusOut: FormEventHandler<HTMLInputElement> = (e) => {
     const parsedValue = parseFloat(e.currentTarget.value.trim());
@@ -80,7 +101,7 @@
     autoBetInFlight = false;
   }
 
-  async function dropWithServerBet() {
+  async function placePlinkoBet() {
     lastBetError = '';
 
     if (multiplayerConfigured && !isMultiplayerConnected()) {
@@ -106,10 +127,65 @@
     return true;
   }
 
-  async function autoBetDropBall() {
+  async function placeCoinflipBet() {
+    lastBetError = '';
+
+    if (multiplayerConfigured && !isMultiplayerConnected()) {
+      lastBetError = 'Waiting for multiplayer connection';
+      return false;
+    }
+
+    if (isMultiplayerConnected()) {
+      const result = await requestBet($betAmount);
+      if (!result.ok) {
+        lastBetError = result.reason ?? 'Bet rejected';
+        return false;
+      }
+    } else {
+      if (isBetExceedBalance) {
+        lastBetError = "You don't have enough balance";
+        return false;
+      }
+      $balance = Math.round(($balance - $betAmount) * 100) / 100;
+    }
+
+    const coinSide = Math.random() < 0.5 ? 'HEADS' : 'TAILS';
+    const isWin = Math.random() < 0.5;
+    const multiplier = isWin ? 2 : 0;
+    const payoutValue = $betAmount * multiplier;
+    const profit = payoutValue - $betAmount;
+
+    reportWin(
+      {
+        id: uuidv4(),
+        betAmount: $betAmount,
+        payout: {
+          multiplier,
+          value: payoutValue,
+        },
+        profit,
+        gameMode: GameMode.COINFLIP,
+        outcome: isWin ? 'WIN' : 'LOSE',
+        side: coinSide,
+        timestamp: Date.now(),
+      },
+      get(activePlayerId),
+    );
+
+    return true;
+  }
+
+  async function placeBet() {
+    if ($gameMode === GameMode.COINFLIP) {
+      return placeCoinflipBet();
+    }
+    return placePlinkoBet();
+  }
+
+  async function autoBetRun() {
     if (autoBetInFlight) return;
     autoBetInFlight = true;
-    const success = await dropWithServerBet();
+    const success = await placeBet();
 
     if (!success) {
       resetAutoBetInterval();
@@ -150,11 +226,11 @@
 
     if (betMode === BetMode.MANUAL) {
       isBetting = true;
-      await dropWithServerBet();
+      await placeBet();
       isBetting = false;
     } else if (autoBetInterval === null) {
       autoBetsLeft = autoBetInput === 0 ? null : autoBetInput;
-      autoBetInterval = setInterval(autoBetDropBall, Math.max(50, autoIntervalMs));
+      autoBetInterval = setInterval(autoBetRun, Math.max(50, autoIntervalMs));
     } else if (autoBetInterval !== null) {
       resetAutoBetInterval();
     }
@@ -237,25 +313,34 @@
     {/if}
   </div>
 
-  <div>
-    <label for="riskLevel" class="text-sm font-medium text-slate-300">Risk</label>
-    <Select
-      id="riskLevel"
-      bind:value={$riskLevel}
-      items={riskLevels}
-      disabled={hasOutstandingBalls || autoBetInterval !== null}
-    />
-  </div>
+  {#if $gameMode === GameMode.PLINKO}
+    <div>
+      <label for="riskLevel" class="text-sm font-medium text-slate-300">Risk</label>
+      <Select
+        id="riskLevel"
+        bind:value={$riskLevel}
+        items={riskLevels}
+        disabled={hasOutstandingBalls || autoBetInterval !== null}
+      />
+    </div>
 
-  <div>
-    <label for="rowCount" class="text-sm font-medium text-slate-300">Rows</label>
-    <Select
-      id="rowCount"
-      bind:value={$rowCount}
-      items={rowCounts}
-      disabled={hasOutstandingBalls || autoBetInterval !== null}
-    />
-  </div>
+    <div>
+      <label for="rowCount" class="text-sm font-medium text-slate-300">Rows</label>
+      <Select
+        id="rowCount"
+        bind:value={$rowCount}
+        items={rowCounts}
+        disabled={hasOutstandingBalls || autoBetInterval !== null}
+      />
+    </div>
+  {:else}
+    <div class="rounded-md border border-amber-400/40 bg-amber-900/20 p-3 text-sm text-amber-100">
+      <p class="font-semibold text-amber-200">Coinflip</p>
+      <p class="mt-1 text-amber-50/80">
+        50/50 odds to double your bet or lose it all. Autobet keeps the same interval controls.
+      </p>
+    </div>
+  {/if}
 
   {#if betMode === BetMode.AUTO}
     <div>
@@ -307,7 +392,7 @@
             on:focusout={handleAutoIntervalFocusOut}
             on:input={(e) => (autoIntervalMs = parseInt(e.currentTarget.value))}
             class="w-24 rounded-sm bg-slate-900 px-2 py-1 text-xs text-white outline-none ring-1 ring-slate-700 focus:ring-cyan-400"
-            title="Delay between auto drops"
+            title="Delay between auto bets"
           />
         </label>
         <p class="mt-1 text-slate-500">Applies when Auto is running.</p>
@@ -317,14 +402,14 @@
 
   <button
     on:click={handleBetClick}
-    disabled={isDropBallDisabled}
+    disabled={isBetActionDisabled}
     class={twMerge(
       'touch-manipulation rounded-md bg-green-500 py-3 font-semibold text-slate-900 transition-colors hover:bg-green-400 active:bg-green-600 disabled:bg-neutral-600 disabled:text-neutral-400',
       autoBetInterval !== null && 'bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600',
     )}
   >
     {#if betMode === BetMode.MANUAL}
-      Drop Ball
+      {$gameMode === GameMode.PLINKO ? 'Drop Ball' : 'Flip Coin'}
     {:else if autoBetInterval === null}
       Start Autobet
     {:else}

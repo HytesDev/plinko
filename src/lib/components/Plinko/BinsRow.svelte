@@ -1,6 +1,6 @@
 <script lang="ts">
   import { binColorsByRowCount, binPayouts } from '$lib/constants/game';
-  import { plinkoEngine, riskLevel, rowCount, winRecords } from '$lib/stores/game';
+  import { plinkoEngine, plinkoWinRecords, riskLevel, rowCount } from '$lib/stores/game';
   import { isAnimationOn } from '$lib/stores/settings';
   import type { Action } from 'svelte/action';
 
@@ -10,8 +10,8 @@
   let binAnimations: Animation[] = [];
 
   $: {
-    if ($winRecords.length) {
-      const lastWinBinIndex = $winRecords[$winRecords.length - 1].binIndex;
+    if ($plinkoWinRecords.length) {
+      const lastWinBinIndex = $plinkoWinRecords[$plinkoWinRecords.length - 1].binIndex;
       playAnimation(lastWinBinIndex);
     }
   }

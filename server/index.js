@@ -47,6 +47,75 @@ function toCents(value) {
   return Math.round(Number(value) * 100) / 100;
 }
 
+function normalizeWinRecord(record) {
+  if (!record || typeof record !== 'object') return null;
+
+  const betAmount = toCents(record.betAmount ?? 0);
+  const payoutMultiplier =
+    typeof record?.payout?.multiplier === 'number' && Number.isFinite(record.payout.multiplier)
+      ? record.payout.multiplier
+      : 0;
+  const payoutValue = toCents(record?.payout?.value ?? 0);
+  const profit =
+    typeof record?.profit === 'number' && Number.isFinite(record.profit)
+      ? toCents(record.profit)
+      : toCents(payoutValue - betAmount);
+  const timestamp =
+    typeof record?.timestamp === 'number' && Number.isFinite(record.timestamp)
+      ? record.timestamp
+      : Date.now();
+  const gameMode = record?.gameMode || 'PLINKO';
+
+  const base = {
+    id: record?.id || uuidv4(),
+    betAmount,
+    payout: {
+      multiplier: payoutMultiplier,
+      value: payoutValue,
+    },
+    profit,
+    timestamp,
+  };
+
+  if (gameMode === 'COINFLIP') {
+    return {
+      ...base,
+      gameMode,
+      outcome: record?.outcome === 'WIN' ? 'WIN' : 'LOSE',
+      side: record?.side === 'TAILS' ? 'TAILS' : 'HEADS',
+    };
+  }
+
+  const rowCount =
+    typeof record?.rowCount === 'number' && Number.isFinite(record.rowCount)
+      ? record.rowCount
+      : 16;
+  const binIndex =
+    typeof record?.binIndex === 'number' && Number.isFinite(record.binIndex)
+      ? record.binIndex
+      : 0;
+
+  return {
+    ...base,
+    gameMode: 'PLINKO',
+    rowCount,
+    binIndex,
+  };
+}
+
+function normalizeStoredPlayer(player) {
+  if (!player || typeof player !== 'object') return null;
+  const copy = structuredClone(player);
+  if (Array.isArray(copy.winRecords)) {
+    copy.winRecords = copy.winRecords
+      .map((record) => normalizeWinRecord(record))
+      .filter(Boolean);
+  } else {
+    copy.winRecords = [];
+  }
+  return copy;
+}
+
 function persistPlayerById(playerId) {
   const token = tokensByPlayerId.get(playerId);
   const player = players.get(playerId);
@@ -161,14 +230,8 @@ function handleWin(playerId, record) {
   const player = players.get(playerId);
   if (!player) return;
 
-  const normalizedRecord = {
-    ...record,
-    profit: toCents(record.profit),
-    payout: {
-      ...record.payout,
-      value: toCents(record.payout.value),
-    },
-  };
+  const normalizedRecord = normalizeWinRecord(record);
+  if (!normalizedRecord) return;
 
   player.winRecords.push(normalizedRecord);
   if (player.winRecords.length > MAX_WIN_RECORDS) {
@@ -185,7 +248,7 @@ function handleWin(playerId, record) {
 function handleJoin(name, socket, providedToken) {
   let token = providedToken && typeof providedToken === 'string' ? providedToken : null;
   const cachedPlayer = token ? storedPlayersByToken.get(token) : null;
-  let player = cachedPlayer ? structuredClone(cachedPlayer) : null;
+  let player = cachedPlayer ? normalizeStoredPlayer(cachedPlayer) : null;
 
   const banExpiry = token ? bannedTokens.get(token) : null;
   if (banExpiry && banExpiry > Date.now()) {
@@ -690,10 +753,13 @@ function loadState() {
     if (Array.isArray(parsed.players)) {
       parsed.players.forEach(({ token, player }) => {
         if (token && player) {
-          storedPlayersByToken.set(token, {
+          const normalized = normalizeStoredPlayer({
             ...player,
             balance: toCents(player.balance),
           });
+          if (normalized) {
+            storedPlayersByToken.set(token, normalized);
+          }
         }
       });
     }

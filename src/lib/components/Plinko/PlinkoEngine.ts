@@ -7,7 +7,7 @@ import {
   betAmountOfExistingBalls,
 } from '$lib/stores/game';
 import { reportWin } from '$lib/network/multiplayer';
-import type { RiskLevel, RowCount } from '$lib/types';
+import { GameMode, type RiskLevel, type RowCount } from '$lib/types';
 import { getRandomBetween } from '$lib/utils/numbers';
 import Matter, { type IBodyDefinition } from 'matter-js';
 import { get } from 'svelte/store';
@@ -269,6 +269,7 @@ class PlinkoEngine {
         {
           id: uuidv4(),
           betAmount,
+          gameMode: GameMode.PLINKO,
           rowCount: this.rowCount,
           binIndex,
           payout: {
@@ -276,6 +277,7 @@ class PlinkoEngine {
             value: payoutValue,
           },
           profit,
+          timestamp: Date.now(),
         },
         playerId,
       );
