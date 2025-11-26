@@ -29,12 +29,12 @@
 
   <div class="flex-1 px-5">
     <div class="mx-auto mt-5 min-w-[300px] max-w-xl drop-shadow-xl md:mt-10 lg:max-w-7xl">
-      <div class="mb-4 flex flex-col gap-3 rounded-lg border border-slate-700 bg-slate-900/80 p-3 shadow-lg md:flex-row md:items-center md:justify-between">
-        <div>
+      <div class="mb-4 flex flex-col gap-3 rounded-lg border border-slate-700 bg-slate-800/80 p-4 shadow-lg md:flex-row md:items-center md:justify-between">
+        <div class="space-y-1">
           <p class="text-xs uppercase tracking-[0.25em] text-slate-400">Game mode</p>
-          <p class="text-sm text-slate-200">Switch between Plinko and Coinflip</p>
+          <p class="text-sm text-slate-200">Pick Plinko or Coinflip—balances carry over</p>
         </div>
-        <div class="flex gap-2 rounded-full bg-slate-800 p-1">
+        <div class="flex gap-2 rounded-full bg-slate-900/80 p-1 ring-1 ring-slate-700">
           <button
             class="rounded-full px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 active:bg-slate-600"
             class:bg-slate-700={$gameMode === GameMode.PLINKO}
